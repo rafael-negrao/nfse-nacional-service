@@ -44,6 +44,35 @@ impedimento é do município, não do cadastro de cada um. Os três certificados
 (Adelfo, Comaho, MCamas) são de empresas de São Paulo, então nenhum permite exercitar outro
 município.
 
+#### Por que São Paulo ainda não emite pelo Emissor Nacional — e quando passa a emitir
+
+Pesquisa em 08/08/2026. São Paulo **aderiu ao padrão nacional compartilhando dados com o ADN, mas
+manteve o emissor próprio**. A migração dos contribuintes para o Emissor Nacional é escalonada, e é
+ela que povoa o CNC:
+
+| Data | Grupo | Fonte |
+|---|---|---|
+| 03/08/2026 | profissionais liberais e autônomos | Prefeitura de SP |
+| 01/09/2026 | optantes do Simples Nacional | Resolução CGSN nº 189/2026 (federal) |
+| 01/01/2027 | optantes do Simples Nacional | Prefeitura de SP |
+
+**As duas últimas linhas se contradizem** — a norma federal marca setembro/2026 e a página da
+Prefeitura marca janeiro/2027. Confirme antes de planejar em cima de qualquer uma.
+
+A Adelfo é **optante do Simples** (`opSimpNac=3` na nota de referência), então cai justamente na
+faixa em disputa: hoje não está no CNC de São Paulo, e é isso que o `E0084` e o `E0120` relatam.
+A rejeição some sozinha quando a migração acontecer — não há o que corrigir no código.
+
+`E0084` é rejeição comum e bem documentada por TecnoSpeed, TOTVS e pelo fórum do ACBr; a orientação
+que todos repetem é conferir a habilitação do contribuinte na interface do Emissor Nacional, não
+mexer no documento. O pré-requisito citado é **Cadastro Municipal de Contribuinte (CMC/IM) válido**
+no município emissor.
+
+Não existe API alternativa: o índice oficial de APIs lista Sefin Nacional, ADN, ADN Municípios, ADN
+Contribuintes, CNC, Parametrização e DANFSE — e nenhuma do Emissor Nacional, que é só web e mobile.
+O `swagger/contribuintesissqn` redireciona para esse mesmo índice. A biblioteca já aponta para os
+endpoints certos.
+
 Emitir de fato exige um **município emissor com CNC povoado onde o CNPJ do certificado tenha
 estabelecimento** (`-Dnfse.municipio=`). O `EmitirECancelarNfseIT` escolhe o prestador pelo CNPJ do
 certificado e usa a outra parte como tomador, então basta apontar `-Dnfse.cert.p12` para o
