@@ -81,13 +81,8 @@ public final class DpsBuilder {
     /** Identificação do aplicativo emissor, gravada em verAplic (máx. 20 caracteres). */
     public static final String VER_APLIC = "adelfo-nfse-1.0.0";
 
-    /**
-     * Formato de dhEmi (TSDateTimeUTC): {@code AAAA-MM-DDThh:mm:ssTZD}.
-     * O pattern do XSD <b>não</b> admite fração de segundos — por isso não se usa
-     * {@code ISO_OFFSET_DATE_TIME}, que a emite e faria o XML ser rejeitado no schema.
-     */
-    private static final DateTimeFormatter FORMATO_DATA_HORA =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
+    /** Formato de dhEmi (TSDateTimeUTC) — ver {@link DataHoraFiscal} para as armadilhas de fuso. */
+    private static final DateTimeFormatter FORMATO_DATA_HORA = DataHoraFiscal.FORMATO;
 
     /** Tipo de inscrição federal usado na composição do Id da DPS. */
     private static final String INSCRICAO_CPF = "1";
@@ -98,7 +93,7 @@ public final class DpsBuilder {
     private String serie;
     private String nDps;
     private LocalDate competencia;
-    private OffsetDateTime dhEmissao = OffsetDateTime.now();
+    private OffsetDateTime dhEmissao = DataHoraFiscal.agora();
     private String municipioEmissor;
     private String tpEmit = "1";
     private String cMotivoEmisTI;
@@ -805,7 +800,7 @@ public final class DpsBuilder {
     }
 
     String dataHoraEmissaoFormatada() {
-        return dhEmissao.format(FORMATO_DATA_HORA);
+        return DataHoraFiscal.formatar(dhEmissao);
     }
 
     /** XML da DPS, não assinado, pronto para {@code NfseService.emitir}. */
@@ -817,7 +812,7 @@ public final class DpsBuilder {
         TCInfDPS info = new TCInfDPS();
         info.setId(montarId());
         info.setTpAmb(ambiente.getCodigo());
-        info.setDhEmi(dhEmissao.format(FORMATO_DATA_HORA));
+        info.setDhEmi(DataHoraFiscal.formatar(dhEmissao));
         info.setVerAplic(verAplic);
         info.setSerie(serie);
         info.setNDPS(nDps);

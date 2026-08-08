@@ -68,8 +68,8 @@ public final class NfseDecisaoJudicialBuilder {
      */
     private static final String N_DFSE_AUSENTE = "0";
 
-    private static final DateTimeFormatter FORMATO_DATA_HORA =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
+    /** Ver {@link DataHoraFiscal} — o offset precisa ser numérico e o fuso, o de Brasília. */
+    private static final DateTimeFormatter FORMATO_DATA_HORA = DataHoraFiscal.FORMATO;
     private static final DateTimeFormatter FORMATO_ANO_MES = DateTimeFormatter.ofPattern("yyMM");
 
     private final DpsBuilder dps;

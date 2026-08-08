@@ -223,7 +223,7 @@ diagnóstico.
 ## Testes
 
 ```bash
-mvn clean install        # 132 testes, sem rede nem certificado
+mvn clean install        # 134 testes, sem rede nem certificado
 ```
 
 Os testes de integração terminam em `IT` e **não rodam no build** — batem em ambiente real e
@@ -247,6 +247,9 @@ mvn test -pl nfse-nacional-service -DfailIfNoTests=false \
 
 Sem certificado, os testes são pulados via `assumeTrue`. Nenhuma senha aparece em código ou log.
 
+Os carimbos de data e hora são fixados no horário de Brasília, então o fuso da máquina não altera o
+documento gerado — `DataHoraFiscalTest` verifica isso forçando a JVM para UTC, Tóquio e Los Angeles.
+
 ---
 
 ## Deploy
@@ -256,7 +259,7 @@ aplicação consumidora os resolve.
 
 ```shell
 cd infraestrutura/ansible/ubuntu
-cp comaho_prd_vars_file.yml.example comaho_prd_vars_file.yml   # preencher o github_token
+cp comaho_prd_vars_file.yml.example comaho_prd_vars_file.yml   # o repo é público: nada a preencher
 ./11.setup.java21.sh --ambiente prd_comaho                     # uma vez por servidor
 ./03.ci.sh           --ambiente prd_comaho
 ```

@@ -37,13 +37,8 @@ public final class EventoBuilder {
     /** Valor fixo exigido pela enumeração do XSD em TE101101/xDesc. */
     private static final String XDESC_CANCELAMENTO = "Cancelamento de NFS-e";
 
-    /**
-     * Formato de dhEvento (TSDateTimeUTC): {@code AAAA-MM-DDThh:mm:ssTZD}.
-     * O pattern do XSD <b>não</b> admite fração de segundos — por isso não se usa
-     * {@code ISO_OFFSET_DATE_TIME}, que a emite e faria o XML ser rejeitado no schema.
-     */
-    private static final DateTimeFormatter FORMATO_DATA_HORA =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
+    /** Formato de dhEvento (TSDateTimeUTC) — ver {@link DataHoraFiscal} para as armadilhas de fuso. */
+    private static final DateTimeFormatter FORMATO_DATA_HORA = DataHoraFiscal.FORMATO;
 
     private EventoBuilder() {
     }
@@ -64,7 +59,7 @@ public final class EventoBuilder {
         info.setId(idPedidoRegistroEvento(request.chaveAcesso(), EVENTO_CANCELAMENTO));
         info.setTpAmb(request.ambiente().getCodigo());
         info.setVerAplic(VER_APLIC);
-        info.setDhEvento(OffsetDateTime.now().format(FORMATO_DATA_HORA));
+        info.setDhEvento(DataHoraFiscal.agoraFormatado());
         info.setChNFSe(request.chaveAcesso());
         aplicarAutor(info, autor);
         info.setE101101(cancelamento);
@@ -90,7 +85,7 @@ public final class EventoBuilder {
         info.setId(idPedidoRegistroEvento(request.chaveAcesso(), request.tipo().getCodigo()));
         info.setTpAmb(request.ambiente().getCodigo());
         info.setVerAplic(VER_APLIC);
-        info.setDhEvento(OffsetDateTime.now().format(FORMATO_DATA_HORA));
+        info.setDhEvento(DataHoraFiscal.agoraFormatado());
         info.setChNFSe(request.chaveAcesso());
         aplicarAutor(info, autor);
         aplicarManifestacao(info, request);
