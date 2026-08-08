@@ -19,13 +19,28 @@ v1.01, e o fluxo de assinatura/GZip/Base64/HTTP está implementado.
 `dpsXmlGZipB64`, `nfseXmlGZipB64`, `pedidoRegistroEventoXmlGZipB64`, `eventoXmlGZipB64`,
 `chaveAcesso`. As respostas de sucesso trazem ainda `idDps` e `alertas`, que a fachada hoje ignora.
 
-**A emissão foi exercitada pela primeira vez em 08/08/2026** (`EmitirECancelarNfseIT`). O documento
-passa pelo schema e **chega às regras de negócio** — assinatura, GZip, Base64 e transporte estão
-validados de ponta a ponta contra a Sefin. A emissão em si para em **`E0084`**: o CNPJ da Adelfo
-não consta no cadastro CNPJ/CNC da **produção restrita** para São Paulo. Não é convênio (SP responde
-`aderenteEmissorNacional: 1`) nem data (a rejeição se repete com outra competência) — é
-pré-requisito administrativo, fora do alcance do código. **Cancelar e manifestar continuam sem
-resposta da Sefin**, porque dependem de uma nota emitida.
+**A emissão foi exercitada pela primeira vez em 08/08/2026** (`EmitirECancelarNfseIT`), nos dois
+ambientes. O documento passa pelo schema e **chega às regras de negócio** — assinatura, GZip,
+Base64, transporte e tradução da rejeição estão validados de ponta a ponta contra a Sefin.
+
+**A emissão em si esbarra no CNC de São Paulo, e isso vale também para produção.** Duas regras, a
+mesma causa: `E0120` ("IM do prestador não deve ser informado, pois **não existem informações
+complementares registradas no CNC NFS-e do município emissor**") e `E0084` ("CNPJ do emitente
+prestador não possui estabelecimento … conforme cadastros CNPJ e **CNC NFS-e**").
+
+São Paulo **não povoou o CNC NFS-e**: a cidade opera o sistema próprio dela. É de lá que vem a nota
+de referência 236 — `tpEmis=2` e certificado da *Secretaria Municipal da Fazenda* na assinatura.
+Ela nasceu no município e foi replicada ao ADN; **não é exemplo do que o Emissor Público aceita**, e
+o IM que ela carrega veio de quem a gerou.
+
+O convênio engana: SP responde `aderenteEmissorNacional: 1` nos dois ambientes, o que diz que o
+município aderiu — não que os contribuintes dele estejam cadastrados para emitir por esta rota.
+Descartadas a data (`E0084` se repete com outra competência) e o ambiente (produção e produção
+restrita recusam igual).
+
+Emitir de fato exige um **município emissor com CNC povoado onde o CNPJ do certificado tenha
+estabelecimento** (`-Dnfse.municipio=`). **Cancelar e manifestar seguem sem resposta da Sefin**,
+porque dependem de uma nota emitida.
 
 Uma NFS-e real de produção já foi consultada e confirma decisões de implementação: a assinatura da
 Receita usa `rsa-sha1` + C14N + enveloped, o `<Signature>` sai **sem prefixo** e o namespace da
@@ -99,7 +114,8 @@ GroupId: `br.com.adelfo.nfse.nacional`. Pacote-raiz idem. O artefato pai chama-s
   primeiro, e reportar só ele faria corrigir um campo por reenvio.
 
   Códigos já vistos: `E2401` chave não encontrada, `E2404` DPS sem NFS-e gerada, `E0084` CNPJ sem
-  estabelecimento no município emissor, `E0120` IM informado sem dados complementares no CNC.
+  estabelecimento no município emissor, `E0120` IM informado sem dados complementares no CNC —
+  estes dois confirmados em produção **e** em produção restrita.
 
 ### Fluxo das operações de escrita
 

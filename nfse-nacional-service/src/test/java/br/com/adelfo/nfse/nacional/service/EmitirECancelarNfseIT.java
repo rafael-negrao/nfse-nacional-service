@@ -40,13 +40,33 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * <p>Espelhar uma nota aceita de verdade é o que dá valor ao teste: uma rejeição aqui aponta para
  * a biblioteca ou para o cadastro do CNPJ no ambiente, não para um leiaute inventado.
  *
- * <p><b>Estado em 08/08/2026:</b> o documento é aceito pelo schema e chega às regras de negócio —
- * assinatura, GZip, Base64 e transporte estão validados contra a Sefin. A emissão em si para em
- * {@code E0084}: <i>"CNPJ do emitente prestador não possui estabelecimento ou domicílio em um
- * município correspondente ao município emissor … conforme cadastros CNPJ e CNC NFS-e"</i>. São
- * Paulo é aderente na produção restrita ({@code aderenteEmissorNacional: 1}), e a rejeição se
- * repete com a competência de julho, então não é convênio nem data: o CNPJ não consta no cadastro
- * <b>daquele ambiente</b>. É pré-requisito administrativo, fora do alcance do código.
+ * <p><b>Estado em 08/08/2026 — por que isto ainda não emite.</b> O documento é aceito pelo schema
+ * e chega às regras de negócio: assinatura, GZip, Base64, transporte e tradução da rejeição estão
+ * validados contra a Sefin, <b>nos dois ambientes</b>. A emissão para em duas regras, e ambas
+ * apontam para o mesmo lugar:
+ *
+ * <ul>
+ *   <li>{@code E0120} — <i>"IM do prestador não deve ser informado, pois <b>não existem
+ *       informações complementares registradas no CNC NFS-e do município emissor</b>"</i>;</li>
+ *   <li>{@code E0084} — <i>"CNPJ do emitente prestador não possui estabelecimento ou domicílio em
+ *       um município correspondente ao município emissor … conforme cadastros CNPJ e
+ *       <b>CNC NFS-e</b>"</i>.</li>
+ * </ul>
+ *
+ * <p><b>São Paulo não povoou o CNC NFS-e</b> — o cadastro nacional de contribuintes de que as duas
+ * regras dependem. A cidade opera o sistema próprio dela, e é de lá que sai a nota de referência:
+ * repare no {@code tpEmis=2} dela e no certificado da <i>Secretaria Municipal da Fazenda</i> na
+ * assinatura. A nota nasceu no município e foi replicada ao ADN depois; não é exemplo do que o
+ * Emissor Público aceita, e o IM que ela traz veio de quem a gerou.
+ *
+ * <p>O convênio confunde: São Paulo responde {@code aderenteEmissorNacional: 1} nos dois
+ * ambientes. Isso diz que o município aderiu, não que os contribuintes dele estejam cadastrados
+ * para emitir por esta rota. Descartadas também a data ({@code E0084} se repete com a competência
+ * de julho) e o ambiente (produção e produção restrita recusam igual).
+ *
+ * <p>Para exercitar a emissão de fato é preciso um <b>município emissor cujo CNC esteja povoado e
+ * no qual o CNPJ do certificado tenha estabelecimento</b> — informe com
+ * {@code -Dnfse.municipio=<código IBGE>}.
  *
  * <p><b>Os dados bancários do descritivo original foram omitidos</b> — este repositório é público
  * e eles não têm papel nenhum no que se está verificando.
@@ -133,6 +153,10 @@ class EmitirECancelarNfseIT {
         System.out.println("[setup] Município   : " + DpsDeTeste.municipio());
         System.out.println("[setup] Referência  : NFS-e " + NFSE_REFERENCIA);
         System.out.println("[setup] Competência : " + competencia());
+        System.out.println("[setup] Série       : " + DpsDeTeste.serie());
+        if (ambiente == TipoAmbiente.PRODUCAO) {
+            System.out.println("[setup] *** PRODUÇÃO: a emissão gera um documento fiscal real ***");
+        }
     }
 
     /**
@@ -141,7 +165,7 @@ class EmitirECancelarNfseIT {
      * nota real.
      */
     private static DpsBuilder dpsEspelhandoAReferencia(String numeroDps) {
-        return DpsBuilder.novo()
+        DpsBuilder dps = DpsBuilder.novo()
                 .ambiente(ambiente)
                 .municipioEmissor(DpsDeTeste.municipio())
                 .identificacao(DpsDeTeste.serie(), numeroDps, competencia())
@@ -149,10 +173,11 @@ class EmitirECancelarNfseIT {
 
                 // --- prestador: o titular do certificado ---------------------------------------
                 .prestadorCnpj(cnpjPrestador)
-                // Sem IM, ao contrário da nota real: E0120 — "IM do prestador não deve ser
-                // informado, pois não existem informações complementares registradas no CNC
-                // NFS-e do município emissor". São Paulo tem cadastro no CNC em produção, mas
-                // não em produção restrita, então o mesmo documento é aceito lá e recusado aqui.
+                // Sem IM, embora a nota de referência traga uma. E0120 recusa o campo nos DOIS
+                // ambientes: "não existem informações complementares registradas no CNC NFS-e do
+                // município emissor". A referência tem tpEmis=2 — não saiu do Emissor Público, e
+                // sim do sistema próprio da Prefeitura de São Paulo, replicado ao ADN depois.
+                // Quem preencheu o IM foi o município; por esta rota o campo não cabe.
                 .prestadorEndereco(DpsBuilder.Endereco.nacional(
                         "3550308", "04273200", "VERGUEIRO", "08787", null, "VL FIRMIANO PINTO"))
                 .prestadorContato(null, "rafael.negrao@gmail.com")
@@ -162,7 +187,7 @@ class EmitirECancelarNfseIT {
 
                 // --- tomador -------------------------------------------------------------------
                 .tomadorCnpj("54559893000139", "COMAHO COMERCIO DE MATERIAIS HOSPITALARES LTDA - EPP")
-                // Idem: o IM do tomador cai na mesma ausência de cadastro no CNC.
+                // Idem para o tomador.
                 .tomadorEndereco(DpsBuilder.Endereco.nacional(
                         "3550308", "04316070", "SAO VENCESLAU", "00324", null, "VILA GUARANI"))
                 .tomadorContato(null, "administrativo.comaho@comaho.com.br")
@@ -179,6 +204,8 @@ class EmitirECancelarNfseIT {
                 .issqnNaoRetido()
                 .aliquota(new BigDecimal("0.00"))
                 .totalTributos(new BigDecimal("0.00"), new BigDecimal("0.00"), new BigDecimal("0.00"));
+
+        return dps;
     }
 
     private static void exigeNfseEmitida() {

@@ -13,14 +13,15 @@ outra configuração é obrigatória.
 | | |
 |---|---|
 | Consultas | **validadas contra o ambiente real**, produção e produção restrita |
-| Emissão | **exercitada contra a Sefin**: passa pelo schema e chega às regras de negócio; para em `E0084`, cadastro do CNPJ no ambiente |
+| Emissão | **exercitada contra a Sefin** nos dois ambientes: passa pelo schema e chega às regras de negócio; para no CNC do município, não no documento |
 | Cancelamento e manifestação | implementados e validados contra os XSDs oficiais, **ainda sem resposta da Sefin** |
 | DANFSE | não implementado — o serviço está fora do ar e sem documentação publicada |
 
 O caminho de escrita — assinatura XMLDSig, GZip, Base64, transporte e tradução da rejeição — está
-validado de ponta a ponta contra a Sefin. O que falta é administrativo: o CNPJ precisa constar no
-cadastro CNPJ/CNC do ambiente para o município emissor (`E0084`). Cancelamento e manifestação
-dependem de uma nota emitida e por isso seguem sem resposta real.
+validado de ponta a ponta contra a Sefin. O que falta é administrativo: o **município emissor
+precisa ter o CNC NFS-e povoado** e o CNPJ precisa ter estabelecimento nele (`E0120`, `E0084`).
+São Paulo não atende a isso em nenhum dos dois ambientes — a cidade opera o sistema próprio dela.
+Cancelamento e manifestação dependem de uma nota emitida e por isso seguem sem resposta real.
 
 ---
 
