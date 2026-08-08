@@ -1,0 +1,12 @@
+# Variáveis do deploy da biblioteca — copie para comaho_prd_vars_file.yml e preencha o token.
+#
+# O arquivo real NÃO é versionado: carrega um token do GitHub, e este repositório fica no
+# próprio GitHub. Ver 00.instrucoes.md.
+#
+# Uma biblioteca não tem banco, SMTP nem serviço — por isso a lista é bem menor que a das
+# aplicações. O deploy termina no ~/.m2 do app_user.
+
+app_user: "ubuntu"
+github_repo: "github.com/rafael-negrao/nfse-nacional-service.git"
+github_token: "PREENCHER"
+source_dir: "/home/ubuntu/nfse-nacional-service"

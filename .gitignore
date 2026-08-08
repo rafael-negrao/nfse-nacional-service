@@ -19,5 +19,9 @@ certificado/
 *.jks
 senha.txt
 
+# Variáveis de deploy: carregam o token do GitHub. Só os .example são versionados.
+infraestrutura/**/*_vars_file.yml
+!infraestrutura/**/*_vars_file.yml.example
+
 # Sequência de numeração das DPS dos testes de integração — estado local de execução.
 nfse-test-sequence.txt

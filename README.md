@@ -249,6 +249,23 @@ Sem certificado, os testes são pulados via `assumeTrue`. Nenhuma senha aparece 
 
 ---
 
+## Deploy
+
+A biblioteca não tem serviço: o deploy instala os três artefatos no `~/.m2` do servidor, de onde a
+aplicação consumidora os resolve.
+
+```shell
+cd infraestrutura/ansible/ubuntu
+cp comaho_prd_vars_file.yml.example comaho_prd_vars_file.yml   # preencher o github_token
+./11.setup.java21.sh --ambiente prd_comaho                     # uma vez por servidor
+./03.ci.sh           --ambiente prd_comaho
+```
+
+**A biblioteca vai antes da aplicação consumidora** — invertida, o build dela falha por dependência
+não resolvida. Detalhes em [`infraestrutura/ansible/ubuntu/00.instrucoes.md`](infraestrutura/ansible/ubuntu/00.instrucoes.md).
+
+---
+
 ## Documentação
 
 O diretório `doc/` guarda tudo o que a biblioteca consome, para que o repositório se baste:

@@ -1,0 +1,161 @@
+---
+# Deploy da biblioteca.
+#
+# Diferente de uma aplicação, aqui não há jar para publicar nem serviço para reiniciar: o
+# resultado do deploy são os três artefatos instalados no repositório Maven local do app_user.
+# É de lá que o cms-root os resolve quando roda o próprio 03.ci.sh.
+#
+# Ordem correta: esta biblioteca primeiro, a aplicação consumidora depois.
+- name: Git pull e instalação da biblioteca NFS-e Nacional no ~/.m2
+  hosts: all
+  become: yes
+  vars:
+    env: "{{ ambiente | default('comaho_prd') }}"
+    pular_testes: "false"
+    grupo_maven: "br/com/adelfo/nfse/nacional"
+  vars_files:
+    - "../{{ env }}_vars_file.yml"
+
+  tasks:
+
+    - name: Garantir que o Git esteja instalado
+      apt:
+        name: git
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Garantir que o Maven esteja instalado
+      apt:
+        name: maven
+        state: present
+      when: ansible_os_family == "Debian"
+
+    # A biblioteca exige Java 21. Sem esta verificação, o Maven falha na compilação com uma
+    # mensagem sobre release 21 que não deixa claro que o problema é a JDK do servidor.
+    - name: Verificar a versão do Java instalada
+      command: java -version
+      register: java_check
+      changed_when: false
+      failed_when: false
+
+    - name: Exigir Java 21
+      fail:
+        msg: >-
+          Java 21 é obrigatório e não foi encontrado. Rode ./11.setup.java21.sh
+          --ambiente {{ env }} antes deste script. Detectado: {{ java_check.stderr | default('nenhum java') }}
+      when: java_check.rc != 0 or ('version "21' not in (java_check.stderr | default('')))
+
+    - name: Verificar se o repositório já existe
+      stat:
+        path: "{{ source_dir }}/.git"
+      register: repo_exists
+
+    - name: Clonar o repositório como {{ app_user }}
+      become_user: "{{ app_user }}"
+      git:
+        repo: "https://{{ github_token }}@{{ github_repo }}"
+        dest: "{{ source_dir }}"
+        clone: yes
+        update: yes
+        version: main
+      when: not repo_exists.stat.exists
+
+    - name: Configurar o diretório como seguro no Git como {{ app_user }}
+      become_user: "{{ app_user }}"
+      command: "git config --global --add safe.directory {{ source_dir }}"
+      changed_when: false
+
+    - name: Atualizar o repositório (git pull) como {{ app_user }}
+      become_user: "{{ app_user }}"
+      git:
+        repo: "https://{{ github_token }}@{{ github_repo }}"
+        dest: "{{ source_dir }}"
+        update: yes
+        version: main
+      when: repo_exists.stat.exists
+
+    - name: Registrar o commit que será construído
+      become_user: "{{ app_user }}"
+      command: "git -C {{ source_dir }} log --oneline -1"
+      register: commit_atual
+      changed_when: false
+
+    - name: Exibir o commit
+      debug:
+        msg: "Construindo: {{ commit_atual.stdout }}"
+
+    # ---------------------------------------------------------------------------
+    # Swap: o xjc gera 117 classes e o build multi-módulo consome RAM. Em VMs
+    # pequenas o mvn é morto pelo OOM killer no meio da compilação. (lição do CCB,
+    # herdada do cms-root)
+    # ---------------------------------------------------------------------------
+    - name: Verificar se o swapfile já existe
+      stat:
+        path: /swapfile
+      register: swapfile_stat
+
+    - name: Criar arquivo de swap de 2GB
+      command: fallocate -l 2G /swapfile
+      when: not swapfile_stat.stat.exists
+
+    - name: Ajustar permissões do swapfile
+      file:
+        path: /swapfile
+        owner: root
+        group: root
+        mode: "0600"
+      when: not swapfile_stat.stat.exists
+
+    - name: Formatar o swapfile
+      command: mkswap /swapfile
+      when: not swapfile_stat.stat.exists
+
+    - name: Ativar o swapfile
+      command: swapon /swapfile
+      when: not swapfile_stat.stat.exists
+
+    - name: Persistir o swap no /etc/fstab
+      lineinfile:
+        path: /etc/fstab
+        line: "/swapfile none swap sw 0 0"
+        state: present
+
+    # Os testes rodam por padrão: são 132, offline, e levam segundos. Eles validam os documentos
+    # contra os XSDs oficiais — é a rede de segurança mais barata que existe aqui. Use
+    # --pular-testes só quando precisar de um deploy urgente.
+    - name: Instalar a biblioteca no ~/.m2 como {{ app_user }}
+      become_user: "{{ app_user }}"
+      shell: "mvn -B clean install {{ '-DskipTests' if pular_testes | bool else '' }}"
+      args:
+        chdir: "{{ source_dir }}"
+      environment:
+        MAVEN_OPTS: "-Xmx1g"
+      register: maven_output
+
+    - name: Mostrar a saída do Maven
+      debug:
+        msg: "{{ maven_output.stdout_lines }}"
+
+    # O deploy de uma biblioteca só está feito quando os artefatos estão no repositório local.
+    # Sem esta conferência, um build "verde" que não instalou nada passaria despercebido — e o
+    # erro só apareceria no build da aplicação consumidora.
+    - name: Localizar os artefatos instalados
+      become_user: "{{ app_user }}"
+      find:
+        paths: "/home/{{ app_user }}/.m2/repository/{{ grupo_maven }}"
+        patterns: "*.jar"
+        recurse: yes
+      register: artefatos
+
+    - name: Exigir os três artefatos no repositório local
+      fail:
+        msg: >-
+          Esperados 3 artefatos em ~/.m2/repository/{{ grupo_maven }}
+          (schemas, client e service); encontrados {{ artefatos.matched }}.
+      when: artefatos.matched < 3
+
+    - name: Confirmar a instalação
+      debug:
+        msg: >-
+          {{ artefatos.matched }} artefatos instalados:
+          {{ artefatos.files | map(attribute='path') | map('basename') | list }}

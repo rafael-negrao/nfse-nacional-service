@@ -1,0 +1,57 @@
+---
+- name: Instalar e configurar Java 21
+  hosts: all
+  become: yes
+  vars:
+    env: "{{ ambiente | default('comaho_prd') }}"
+    java_home: "/usr/lib/jvm/java-21-openjdk-{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+  vars_files:
+    - "../{{ env }}_vars_file.yml"
+
+  tasks:
+
+    - name: Atualizar cache apt
+      apt:
+        update_cache: yes
+
+    - name: Instalar Java 21 (OpenJDK)
+      apt:
+        name: openjdk-21-jdk
+        state: present
+
+    - name: Definir Java 21 como padrão (java)
+      alternatives:
+        name: java
+        path: "{{ java_home }}/bin/java"
+        priority: 2111
+
+    - name: Definir Java 21 como padrão (javac)
+      alternatives:
+        name: javac
+        path: "{{ java_home }}/bin/javac"
+        priority: 2111
+
+    - name: Configurar JAVA_HOME no /etc/environment
+      lineinfile:
+        path: /etc/environment
+        regexp: '^JAVA_HOME='
+        line: 'JAVA_HOME="{{ java_home }}"'
+        state: present
+
+    - name: Verificar versão do Java
+      command: java -version
+      register: java_version_output
+      changed_when: false
+
+    - name: Exibir versão do Java instalada
+      debug:
+        var: java_version_output.stderr
+
+    - name: Verificar JAVA_HOME configurado
+      command: bash -c "source /etc/environment && echo $JAVA_HOME"
+      register: java_home_output
+      changed_when: false
+
+    - name: Exibir JAVA_HOME
+      debug:
+        var: java_home_output.stdout
