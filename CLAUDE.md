@@ -38,8 +38,16 @@ município aderiu — não que os contribuintes dele estejam cadastrados para em
 Descartadas a data (`E0084` se repete com outra competência) e o ambiente (produção e produção
 restrita recusam igual).
 
+**Confirmado com um segundo CNPJ:** a Comaho (`54559893000139`), com certificado próprio, recebe o
+mesmo `E0084` em São Paulo. Dois contribuintes distintos, mesma cidade, mesma rejeição — o
+impedimento é do município, não do cadastro de cada um. Os três certificados disponíveis
+(Adelfo, Comaho, MCamas) são de empresas de São Paulo, então nenhum permite exercitar outro
+município.
+
 Emitir de fato exige um **município emissor com CNC povoado onde o CNPJ do certificado tenha
-estabelecimento** (`-Dnfse.municipio=`). **Cancelar e manifestar seguem sem resposta da Sefin**,
+estabelecimento** (`-Dnfse.municipio=`). O `EmitirECancelarNfseIT` escolhe o prestador pelo CNPJ do
+certificado e usa a outra parte como tomador, então basta apontar `-Dnfse.cert.p12` para o
+certificado desejado. **Cancelar e manifestar seguem sem resposta da Sefin**,
 porque dependem de uma nota emitida.
 
 Uma NFS-e real de produção já foi consultada e confirma decisões de implementação: a assinatura da

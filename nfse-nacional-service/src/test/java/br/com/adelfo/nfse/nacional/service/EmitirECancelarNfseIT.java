@@ -112,9 +112,41 @@ class EmitirECancelarNfseIT {
                 : LocalDate.parse(informada);
     }
 
+    /**
+     * Uma das partes da nota de referência. O prestador é escolhido pelo CNPJ do certificado, e a
+     * outra vira tomador — sem isso, usar o certificado da Comaho produziria uma DPS em que
+     * prestador e tomador são o mesmo CNPJ.
+     *
+     * <p>Todos os campos saem do XML da NFS-e 236; nada aqui foi inventado.
+     */
+    private record Parte(String cnpj, String nome, String cep, String logradouro,
+                         String numero, String bairro, String email) {
+    }
+
+    private static final Parte ADELFO = new Parte(
+            "06169966000133", "ADELFO SERVICOS ADMINISTRATIVOS E TECNOLOGIA DA INFORMACAO LT",
+            "04273200", "VERGUEIRO", "08787", "VL FIRMIANO PINTO", "rafael.negrao@gmail.com");
+
+    private static final Parte COMAHO = new Parte(
+            "54559893000139", "COMAHO COMERCIO DE MATERIAIS HOSPITALARES LTDA - EPP",
+            "04316070", "SAO VENCESLAU", "00324", "VILA GUARANI",
+            "administrativo.comaho@comaho.com.br");
+
     private static TipoAmbiente ambiente;
     private static NfseService service;
     private static String cnpjPrestador;
+
+    /** As partes conhecidas, por CNPJ. Um certificado fora desta lista não tem endereço aqui. */
+    private static final java.util.Map<String, Parte> PARTES_CONHECIDAS =
+            java.util.Map.of(ADELFO.cnpj(), ADELFO, COMAHO.cnpj(), COMAHO);
+
+    /**
+     * Resolvidos no setup a partir do CNPJ do certificado. {@code prestador} é nulo quando o
+     * certificado não é de nenhuma parte conhecida — nesse caso a DPS sai sem endereço de
+     * prestador, em vez de atribuir a um CNPJ o endereço de outro.
+     */
+    private static Parte prestador;
+    private static Parte tomador;
 
     /** Preenchidos pela emissão; nulos quando ela foi rejeitada. */
     private static String chaveAcesso;
@@ -148,8 +180,15 @@ class EmitirECancelarNfseIT {
                 certificado, Duration.ofSeconds(15), Duration.ofSeconds(60));
         service = new NfseServiceImpl(certificado, httpClient);
 
+        // E0812/E1991: quem assina tem de ser o emitente, então o prestador sai do certificado.
+        prestador = PARTES_CONHECIDAS.get(cnpjPrestador);
+        tomador = prestador == COMAHO ? ADELFO : COMAHO;
+
         System.out.println("[setup] Ambiente    : " + ambiente + " (tpAmb=" + ambiente.getCodigo() + ")");
-        System.out.println("[setup] Prestador   : " + cnpjPrestador);
+        System.out.println("[setup] Prestador   : " + cnpjPrestador + " — "
+                + (prestador != null ? prestador.nome() : "certificado fora das partes conhecidas, "
+                        + "DPS sem endereço de prestador"));
+        System.out.println("[setup] Tomador     : " + tomador.cnpj() + " — " + tomador.nome());
         System.out.println("[setup] Município   : " + DpsDeTeste.municipio());
         System.out.println("[setup] Referência  : NFS-e " + NFSE_REFERENCIA);
         System.out.println("[setup] Competência : " + competencia());
@@ -178,22 +217,21 @@ class EmitirECancelarNfseIT {
                 // município emissor". A referência tem tpEmis=2 — não saiu do Emissor Público, e
                 // sim do sistema próprio da Prefeitura de São Paulo, replicado ao ADN depois.
                 // Quem preencheu o IM foi o município; por esta rota o campo não cabe.
-                .prestadorEndereco(DpsBuilder.Endereco.nacional(
-                        "3550308", "04273200", "VERGUEIRO", "08787", null, "VL FIRMIANO PINTO"))
-                .prestadorContato(null, "rafael.negrao@gmail.com")
+
                 // opSimpNac=3 com regApTribSN=1, como na nota real
                 .optanteSimplesNacionalMeEpp("1")
                 .semRegimeEspecial()
 
                 // --- tomador -------------------------------------------------------------------
-                .tomadorCnpj("54559893000139", "COMAHO COMERCIO DE MATERIAIS HOSPITALARES LTDA - EPP")
+                .tomadorCnpj(tomador.cnpj(), tomador.nome())
                 // Idem para o tomador.
                 .tomadorEndereco(DpsBuilder.Endereco.nacional(
-                        "3550308", "04316070", "SAO VENCESLAU", "00324", null, "VILA GUARANI"))
-                .tomadorContato(null, "administrativo.comaho@comaho.com.br")
+                        DpsDeTeste.municipio(), tomador.cep(), tomador.logradouro(),
+                        tomador.numero(), null, tomador.bairro()))
+                .tomadorContato(null, tomador.email())
 
                 // --- serviço -------------------------------------------------------------------
-                .servicoPrestadoNoMunicipio("3550308")
+                .servicoPrestadoNoMunicipio(DpsDeTeste.municipio())
                 .servico("010401", DESCRICAO_SERVICO)
                 .codigoTributacaoMunicipal("001")
                 .codigoNbs("999999999")
@@ -205,7 +243,19 @@ class EmitirECancelarNfseIT {
                 .aliquota(new BigDecimal("0.00"))
                 .totalTributos(new BigDecimal("0.00"), new BigDecimal("0.00"), new BigDecimal("0.00"));
 
-        return dps;
+        return comEnderecoDoPrestador(dps);
+    }
+
+    /** O endereço do prestador só entra quando se sabe de quem é o certificado. */
+    private static DpsBuilder comEnderecoDoPrestador(DpsBuilder dps) {
+        if (prestador == null) {
+            return dps;
+        }
+        return dps
+                .prestadorEndereco(DpsBuilder.Endereco.nacional(
+                        DpsDeTeste.municipio(), prestador.cep(), prestador.logradouro(),
+                        prestador.numero(), null, prestador.bairro()))
+                .prestadorContato(null, prestador.email());
     }
 
     private static void exigeNfseEmitida() {
