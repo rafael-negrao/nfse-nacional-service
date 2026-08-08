@@ -1,0 +1,23 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+.claude/settings.local.json
+
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+.DS_Store
+
+# Certificados e senhas nunca entram no repositório — a aplicação consumidora
+# carrega o .pfx de um cofre e o fornece via @Bean CertificadoDigital.
+certificado/
+*.pfx
+*.p12
+*.jks
+senha.txt
+
+# Sequência de numeração das DPS dos testes de integração — estado local de execução.
+nfse-test-sequence.txt

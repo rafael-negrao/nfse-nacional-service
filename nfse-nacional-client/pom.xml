@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>br.com.adelfo.nfse.nacional</groupId>
+        <artifactId>nfse-nacional</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>nfse-nacional-client</artifactId>
+    <packaging>jar</packaging>
+
+    <description>Transporte HTTP com mTLS para as APIs REST do Sistema Nacional NFS-e</description>
+
+    <dependencies>
+        <!-- Nenhuma dependência de HTTP: java.net.http.HttpClient (JDK 11+) atende.
+             O único acoplamento externo é o Jackson, para o JSON das rotas. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

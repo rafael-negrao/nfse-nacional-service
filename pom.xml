@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.3.5</version>
+        <relativePath/>
+    </parent>
+
+    <!-- Agregador. O artifactId não repete o do módulo-fachada (nfse-nacional-service)
+         porque parent e módulo não podem compartilhar groupId:artifactId:version. -->
+    <groupId>br.com.adelfo.nfse.nacional</groupId>
+    <artifactId>nfse-nacional</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+
+    <name>nfse-nacional</name>
+    <description>Biblioteca Java para emissão, consulta e cancelamento de NFS-e no Sistema Nacional (Sefin Nacional / ADN)</description>
+
+    <modules>
+        <module>nfse-nacional-schemas</module>
+        <module>nfse-nacional-client</module>
+        <module>nfse-nacional-service</module>
+    </modules>
+
+    <properties>
+        <java.version>21</java.version>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <xmlsec.version>2.3.4</xmlsec.version>
+        <jaxb2.plugin.version>3.1.0</jaxb2.plugin.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.apache.santuario</groupId>
+                <artifactId>xmlsec</artifactId>
+                <version>${xmlsec.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- Biblioteca, não aplicação: nenhum módulo gera jar executável. -->
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <configuration>
+                        <skip>true</skip>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+</project>

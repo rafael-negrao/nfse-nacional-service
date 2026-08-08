@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>br.com.adelfo.nfse.nacional</groupId>
+        <artifactId>nfse-nacional</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>nfse-nacional-schemas</artifactId>
+    <packaging>jar</packaging>
+
+    <description>Classes JAXB geradas dos XSDs oficiais da NFS-e Nacional v1.01</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>jakarta.xml.bind</groupId>
+            <artifactId>jakarta.xml.bind-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish.jaxb</groupId>
+            <artifactId>jaxb-runtime</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>jaxb2-maven-plugin</artifactId>
+                <version>${jaxb2.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>generate-schemas-nfse</id>
+                        <goals>
+                            <goal>xjc</goal>
+                        </goals>
+                        <configuration>
+                            <!-- Apenas os schemas raiz. Os tipos* são puxados via xs:include
+                                 (mesmo targetNamespace) e não devem ser listados aqui, sob pena
+                                 de o xjc reclamar de definição duplicada.
+                                 CNC_v1.00 fica de fora: é o leiaute de upload usado por municípios,
+                                 fora do escopo desta biblioteca (contribuinte emissor). -->
+                            <sources>
+                                <source>src/main/resources/xsd/DPS_v1.01.xsd</source>
+                                <source>src/main/resources/xsd/NFSe_v1.01.xsd</source>
+                                <source>src/main/resources/xsd/evento_v1.01.xsd</source>
+                                <source>src/main/resources/xsd/pedRegEvento_v1.01.xsd</source>
+                            </sources>
+                            <packageName>br.com.adelfo.nfse.nacional.schemas</packageName>
+                            <generateEpisode>true</generateEpisode>
+                            <clearOutputDir>false</clearOutputDir>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
