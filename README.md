@@ -13,12 +13,14 @@ outra configuração é obrigatória.
 | | |
 |---|---|
 | Consultas | **validadas contra o ambiente real**, produção e produção restrita |
-| Emissão, cancelamento e manifestação | implementados e validados contra os XSDs oficiais, **nunca exercitados contra a Sefin** |
+| Emissão | **exercitada contra a Sefin**: passa pelo schema e chega às regras de negócio; para em `E0084`, cadastro do CNPJ no ambiente |
+| Cancelamento e manifestação | implementados e validados contra os XSDs oficiais, **ainda sem resposta da Sefin** |
 | DANFSE | não implementado — o serviço está fora do ar e sem documentação publicada |
 
-As operações de escrita montam documentos que validam no schema, usam os nomes de campo confirmados
-na Swagger oficial e seguem as regras de negócio dos anexos. Ainda assim, nenhuma recebeu resposta
-da Sefin — trate-as como não verificadas até a primeira emissão real.
+O caminho de escrita — assinatura XMLDSig, GZip, Base64, transporte e tradução da rejeição — está
+validado de ponta a ponta contra a Sefin. O que falta é administrativo: o CNPJ precisa constar no
+cadastro CNPJ/CNC do ambiente para o município emissor (`E0084`). Cancelamento e manifestação
+dependem de uma nota emitida e por isso seguem sem resposta real.
 
 ---
 
@@ -223,7 +225,7 @@ diagnóstico.
 ## Testes
 
 ```bash
-mvn clean install        # 134 testes, sem rede nem certificado
+mvn clean install        # 137 testes, sem rede nem certificado
 ```
 
 Os testes de integração terminam em `IT` e **não rodam no build** — batem em ambiente real e
@@ -244,6 +246,7 @@ mvn test -pl nfse-nacional-service -DfailIfNoTests=false \
 | `BaixarSwaggerIT` | não — atualiza `doc/openapi/` |
 | `DanfseIT` | não — sonda o DANFSE |
 | `EmitirNfseIT`, `NfseServicosIT`, `ContratoSefinIT` | **sim — emitem documento fiscal** |
+| `EmitirECancelarNfseIT` | **sim** — emite espelhando uma NFS-e real, imprime o XML e cancela |
 
 Sem certificado, os testes são pulados via `assumeTrue`. Nenhuma senha aparece em código ou log.
 

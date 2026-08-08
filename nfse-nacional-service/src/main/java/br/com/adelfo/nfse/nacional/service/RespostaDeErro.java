@@ -20,6 +20,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *
  * <p>O código vem no formato {@code E####} — não é numérico como o {@code cStat} da NF-e.
  *
+ * <p><b>As rotas não concordam na grafia dos campos.</b> As consultas usam {@code erro} singular
+ * com chaves minúsculas; a <b>emissão</b> devolve {@code erros[]} com as chaves em PascalCase e
+ * ainda o {@code idDPS} recusado:
+ * <pre>
+ * {
+ *   "tipoAmbiente": 2, "versaoAplicativo": "SefinNacional_1.6.0",
+ *   "idDPS": "DPS3550308…900",
+ *   "erros": [ { "Codigo": "E0120", "Descricao": "IM do prestador não deve ser informado…" } ]
+ * }
+ * </pre>
+ * Por isso os campos são procurados <b>sem diferenciar maiúsculas</b>. Quando isso não era feito,
+ * uma rejeição de negócio chegava ao chamador como código {@code "400"} e a mensagem vinha como o
+ * JSON inteiro — indistinguível de uma falha de transporte.
+ *
  * <p>Nem toda resposta segue esse formato: rota inexistente devolve a página HTML de erro do
  * ASP.NET em que a Sefin roda. Nesses casos o status HTTP vira o código, para não inventar
  * significado sobre um corpo que não é da API.
@@ -39,7 +53,7 @@ final class RespostaDeErro {
             JsonNode erro = primeiroErro(raiz);
             if (erro != null) {
                 codigo = texto(erro, "codigo");
-                descricao = coalesce(texto(erro, "descricao"), texto(erro, "mensagem"));
+                descricao = coalesce(descricaoDeTodos(raiz), descricaoDe(erro));
             }
         } catch (Exception corpoNaoEhJson) {
             // Resposta HTML do servidor de aplicação: cai no retorno genérico abaixo.
@@ -84,11 +98,54 @@ final class RespostaDeErro {
             return erros.get(0);
         }
         // Alguns endpoints devolvem código e descrição no próprio corpo, sem envelope.
-        return raiz.has("codigo") ? raiz : null;
+        return texto(raiz, "codigo") != null ? raiz : null;
     }
 
+    /**
+     * Todas as rejeições do lote, numeradas, quando a Sefin aponta mais de uma.
+     *
+     * <p>A validação da DPS não para no primeiro problema. Reportar só o inicial faria o chamador
+     * corrigir um campo, reenviar e receber o seguinte — um de cada vez.
+     *
+     * @return {@code null} quando há zero ou uma rejeição, caso em que a descrição simples serve
+     */
+    private static String descricaoDeTodos(JsonNode raiz) {
+        JsonNode erros = raiz.get("erros");
+        if (erros == null || !erros.isArray() || erros.size() < 2) {
+            return null;
+        }
+        StringBuilder texto = new StringBuilder(erros.size() + " rejeições:");
+        for (int i = 0; i < erros.size(); i++) {
+            JsonNode erro = erros.get(i);
+            texto.append(" (").append(i + 1).append(") [")
+                    .append(coalesce(texto(erro, "codigo"), "?")).append("] ")
+                    .append(coalesce(descricaoDe(erro), "sem descrição"));
+        }
+        return texto.toString();
+    }
+
+    private static String descricaoDe(JsonNode erro) {
+        return coalesce(texto(erro, "descricao"), texto(erro, "mensagem"));
+    }
+
+    /**
+     * Valor do campo, <b>ignorando maiúsculas e minúsculas</b> no nome.
+     *
+     * <p>A grafia varia por rota: {@code codigo} nas consultas, {@code Codigo} na emissão. Buscar
+     * pelo nome exato faz a rejeição de negócio se perder e virar o status HTTP.
+     */
     private static String texto(JsonNode no, String campo) {
         JsonNode valor = no.get(campo);
+        if (valor == null) {
+            var nomes = no.fieldNames();
+            while (nomes.hasNext()) {
+                String nome = nomes.next();
+                if (nome.equalsIgnoreCase(campo)) {
+                    valor = no.get(nome);
+                    break;
+                }
+            }
+        }
         return valor == null || valor.isNull() ? null : valor.asText();
     }
 

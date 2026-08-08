@@ -19,8 +19,13 @@ v1.01, e o fluxo de assinatura/GZip/Base64/HTTP está implementado.
 `dpsXmlGZipB64`, `nfseXmlGZipB64`, `pedidoRegistroEventoXmlGZipB64`, `eventoXmlGZipB64`,
 `chaveAcesso`. As respostas de sucesso trazem ainda `idDps` e `alertas`, que a fachada hoje ignora.
 
-**As rotas de escrita continuam sem ter sido exercidas** — emitir e cancelar nunca receberam
-resposta da Sefin.
+**A emissão foi exercitada pela primeira vez em 08/08/2026** (`EmitirECancelarNfseIT`). O documento
+passa pelo schema e **chega às regras de negócio** — assinatura, GZip, Base64 e transporte estão
+validados de ponta a ponta contra a Sefin. A emissão em si para em **`E0084`**: o CNPJ da Adelfo
+não consta no cadastro CNPJ/CNC da **produção restrita** para São Paulo. Não é convênio (SP responde
+`aderenteEmissorNacional: 1`) nem data (a rejeição se repete com outra competência) — é
+pré-requisito administrativo, fora do alcance do código. **Cancelar e manifestar continuam sem
+resposta da Sefin**, porque dependem de uma nota emitida.
 
 Uma NFS-e real de produção já foi consultada e confirma decisões de implementação: a assinatura da
 Receita usa `rsa-sha1` + C14N + enveloped, o `<Signature>` sai **sem prefixo** e o namespace da
@@ -83,8 +88,18 @@ GroupId: `br.com.adelfo.nfse.nacional`. Pacote-raiz idem. O artefato pai chama-s
   ```
   O código é `E####`, não numérico como o `cStat` da NF-e. `RespostaDeErro` extrai `erro` singular,
   `erros[]` plural e o formato sem envelope; para corpo não-JSON (rota inexistente devolve HTML do
-  ASP.NET) o status HTTP vira o código, para não inventar significado fiscal. Códigos já vistos:
-  `E2401` chave não encontrada, `E2404` DPS sem NFS-e gerada.
+  ASP.NET) o status HTTP vira o código, para não inventar significado fiscal.
+
+  **As rotas não concordam na grafia dos campos.** As consultas mandam `erro` com chaves
+  minúsculas; a **emissão** manda `erros[]` com as chaves em **PascalCase** (`Codigo`,
+  `Descricao`) e ainda o `idDPS` recusado. Enquanto a busca era sensível a maiúsculas, a rejeição
+  de negócio chegava ao chamador como código `"400"` com o JSON inteiro por mensagem —
+  indistinguível de falha de transporte. Hoje os campos são procurados sem diferenciar caixa, e
+  quando há mais de um apontamento **todos** entram na mensagem: a validação da DPS não para no
+  primeiro, e reportar só ele faria corrigir um campo por reenvio.
+
+  Códigos já vistos: `E2401` chave não encontrada, `E2404` DPS sem NFS-e gerada, `E0084` CNPJ sem
+  estabelecimento no município emissor, `E0120` IM informado sem dados complementares no CNC.
 
 ### Fluxo das operações de escrita
 
@@ -487,7 +502,7 @@ Xerces falha de forma intermitente quando o módulo de schemas entra como jar.
 Java 21 e Maven 3.8+ (o Maven local já roda em 21 por padrão).
 
 ```bash
-mvn clean install              # build completo (134 testes), instala em ~/.m2
+mvn clean install              # build completo (137 testes), instala em ~/.m2
 TZ=UTC mvn clean install       # o servidor roda em UTC; rode assim antes de um deploy
 mvn clean install -DskipTests  # só empacota
 mvn clean compile              # regenera o JAXB do nfse-nacional-schemas
@@ -517,6 +532,7 @@ mvn test -pl nfse-nacional-service -DfailIfNoTests=false \
 | `BaixarSwaggerIT` | Só leitura. Atualiza `doc/openapi/` com as especificações oficiais |
 | `ContratoSefinIT` | Diagnóstico: POST cru em `/nfse` despejando corpo enviado e recebido |
 | `EmitirNfseIT` | Emissão pela fachada, com a DPS montada pelo `DpsBuilder` |
+| `EmitirECancelarNfseIT` | Emitir → imprimir o XML → cancelar, com a DPS espelhando uma NFS-e real |
 | `NfseServicosIT` | Ciclo ordenado: emitir → consultar por chave → consultar por DPS → cancelar |
 
 `CertificadoDeTeste` resolve a credencial: usa `-Dnfse.cert.p12`/`-Dnfse.cert.senha` quando

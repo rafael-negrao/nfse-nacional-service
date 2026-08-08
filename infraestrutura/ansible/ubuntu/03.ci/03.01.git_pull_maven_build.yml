@@ -125,7 +125,7 @@
         line: "/swapfile none swap sw 0 0"
         state: present
 
-    # Os testes rodam por padrão: são 134, offline, e levam segundos. Eles validam os documentos
+    # Os testes rodam por padrão: são 137, offline, e levam segundos. Eles validam os documentos
     # contra os XSDs oficiais — é a rede de segurança mais barata que existe aqui. Use
     # --pular-testes só quando precisar de um deploy urgente.
     - name: Instalar a biblioteca no ~/.m2 como {{ app_user }}
