@@ -33,20 +33,33 @@ public record ConvenioResponse(boolean aderenteAmbienteNacional,
      * Se os contribuintes deste município já emitem pelo padrão nacional — <b>a condição real</b>
      * para {@code NfseService.emitir} funcionar.
      *
-     * <p>A Swagger declara o enum como {@code 0, 1, -1} e não documenta os valores. O significado
-     * foi determinado comparando municípios em produção restrita:
+     * <p><b>É indicação, não garantia.</b> A Swagger declara o enum como {@code 0, 1, -1} e não
+     * documenta os valores. Confrontando a API de produção com a lista oficial de municípios
+     * aderentes ({@code doc/municipios-aderentes-20260710.xlsx}, coluna
+     * {@code AderenteEmissorNacional}), a leitura "{@code 1} = os contribuintes emitem pelo padrão
+     * nacional" bateu em <b>quatro dos seis</b> municípios amostrados:
      *
      * <table border="1">
-     *   <caption>Observado em 09/08/2026</caption>
-     *   <tr><th>Município</th><th>{@code aderenteEmissorNacional}</th><th>situação</th></tr>
-     *   <tr><td>Juiz de Fora, Niterói, Montes Claros</td><td>true</td><td>1</td></tr>
-     *   <tr><td>São Paulo</td><td>true</td><td>0</td></tr>
-     *   <tr><td>Brasiléia, Imbé</td><td>false</td><td>ausente</td></tr>
+     *   <caption>Consultado em 09/08/2026 contra a lista de 10/07/2026</caption>
+     *   <tr><th>Município</th><th>situação (API)</th><th>lista oficial</th><th>confere</th></tr>
+     *   <tr><td>São Paulo</td><td>0</td><td>Não</td><td>sim</td></tr>
+     *   <tr><td>Brasiléia</td><td>0</td><td>Não</td><td>sim</td></tr>
+     *   <tr><td>Niterói</td><td>1</td><td>Sim</td><td>sim</td></tr>
+     *   <tr><td>Imbé</td><td>1</td><td>Sim</td><td>sim</td></tr>
+     *   <tr><td>Juiz de Fora</td><td>1</td><td>Não</td><td><b>não</b></td></tr>
+     *   <tr><td>Montes Claros</td><td>0</td><td>Sim</td><td><b>não</b></td></tr>
      * </table>
      *
-     * <p>Ou seja: {@code 1} os contribuintes migraram; {@code 0} o município aderiu mas eles ainda
-     * não; ausente, o município não aderiu. O valor {@code -1} está no enum e nunca foi observado —
-     * por isso qualquer coisa diferente de {@code 1} é tratada como "ainda não".
+     * <p>As duas divergências apontam em direções opostas, então não são explicáveis só pelo mês
+     * de diferença entre as fontes. Use este método como <b>pré-voo barato</b> — ele evita montar
+     * uma DPS que seria recusada —, mas a fonte de verdade é a lista oficial, e a resposta
+     * definitiva é a própria tentativa de emissão.
+     *
+     * <p>Onde as três fontes concordam é em São Paulo: {@code 0} na API dos dois ambientes,
+     * {@code Não} na lista, e {@code E0084} em toda emissão tentada.
+     *
+     * <p>O valor {@code -1} está no enum e nunca foi observado — tudo que não for {@code 1} conta
+     * como "ainda não".
      */
     public boolean contribuintesEmitemPeloPadraoNacional() {
         return situacaoEmissaoPadraoContribuintesRFB != null

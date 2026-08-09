@@ -76,10 +76,33 @@ O significado foi determinado comparando municípios em produção restrita (09/
 | São Paulo | true | **0** — município aderiu, contribuintes não migraram |
 | Brasiléia, Imbé | false | ausente — município não aderente |
 
-`ConvenioResponse.contribuintesEmitemPeloPadraoNacional()` encapsula isso, e é a checagem a fazer
-antes de emitir. `EmitirECancelarNfseIT` a executa no setup: sem ela a resposta é um `E0084`, que
-manda procurar defeito no cadastro da empresa quando o que falta é a migração do município inteiro.
-O valor `-1` está no enum e nunca foi observado, então tudo que não for `1` conta como "ainda não".
+**Correção (09/08/2026):** essa leitura vale como indicação, não como regra. Confrontada com a
+lista oficial de aderentes (`doc/municipios-aderentes-20260710.xlsx`, coluna
+`AderenteEmissorNacional`), ela bate em 4 dos 6 municípios amostrados — Juiz de Fora responde
+situação `1` mas consta como `Não`, e Montes Claros o inverso. As divergências apontam em direções
+opostas, então não se explicam apenas pelo mês entre as fontes.
+
+`ConvenioResponse.contribuintesEmitemPeloPadraoNacional()` encapsula a leitura e serve de pré-voo
+barato — evita montar uma DPS fadada à recusa —, mas **a fonte de verdade é a lista oficial**, e a
+resposta definitiva é a tentativa de emissão. Em São Paulo as três fontes concordam: `0` na API dos
+dois ambientes, `Não` na lista, `E0084` em toda emissão.
+
+#### O cronograma de adesão dos municípios já terminou
+
+`doc/municipios-aderentes-20260710.xlsx`, baixado de gov.br/nfse. A LC 214/2025 obrigou todos a
+aderir até 01/01/2026, e a lista mostra **5.571 de 5.571 aderentes**. Nenhum registro tem início de
+vigência futuro: 4 em 2022, 308 em 2023, 107 em 2024, 2.561 em 2025 e 2.589 em 2026.
+
+Aderir, porém, admite dois caminhos — e é aqui que mora a confusão:
+
+| Caminho | Municípios |
+|---|---|
+| Contribuintes emitem pelo **Emissor Nacional** | 2.517 (45%) |
+| Município mantém **emissor próprio** e compartilha com o ADN | 3.054 (55%) |
+
+São Paulo está entre os 3.054. Portanto **não há cronograma municipal a esperar**: o que falta é a
+migração dos contribuintes dentro de cada município, regida pela Resolução CGSN nº 189/2026 e pelos
+calendários municipais.
 
 `E0084` é rejeição comum e bem documentada por TecnoSpeed, TOTVS e pelo fórum do ACBr; a orientação
 que todos repetem é conferir a habilitação do contribuinte na interface do Emissor Nacional, não
