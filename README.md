@@ -166,8 +166,10 @@ Servido pelo ADN, sob `/parametrizacao`: `consultarConvenio`, `consultarAliquota
 `consultarHistoricoAliquotas`, `consultarRegimesEspeciais`, `consultarBeneficio` e
 `consultarRetencoes`.
 
-Consulte o convênio **antes de emitir**: sem `aderenteEmissorNacional`, o município não aceita DPS
-pelo emissor público.
+Consulte o convênio **antes de emitir** — e olhe
+`ConvenioResponse.contribuintesEmitemPeloPadraoNacional()`, não `aderenteEmissorNacional`. Este
+último diz que o *município* aderiu, não que os *contribuintes* dele já possam emitir: São Paulo
+responde `true` e ainda assim recusa toda emissão, porque manteve o emissor próprio.
 
 ### Builders
 

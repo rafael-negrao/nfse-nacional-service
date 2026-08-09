@@ -63,6 +63,24 @@ A Adelfo é **optante do Simples** (`opSimpNac=3` na nota de referência), entã
 faixa em disputa: hoje não está no CNC de São Paulo, e é isso que o `E0084` e o `E0120` relatam.
 A rejeição some sozinha quando a migração acontecer — não há o que corrigir no código.
 
+#### Como saber, antes de emitir, se o município aceita
+
+`aderenteEmissorNacional` **não responde isso** — diz que o município aderiu, não que os
+contribuintes dele já emitam por essa via. Quem responde é o
+`situacaoEmissaoPadraoContribuintesRFB`, que a Swagger declara como `0, 1, -1` e **não documenta**.
+O significado foi determinado comparando municípios em produção restrita (09/08/2026):
+
+| Município | `aderenteEmissorNacional` | situação |
+|---|---|---|
+| Juiz de Fora, Niterói, Montes Claros | true | **1** — contribuintes migrados |
+| São Paulo | true | **0** — município aderiu, contribuintes não migraram |
+| Brasiléia, Imbé | false | ausente — município não aderente |
+
+`ConvenioResponse.contribuintesEmitemPeloPadraoNacional()` encapsula isso, e é a checagem a fazer
+antes de emitir. `EmitirECancelarNfseIT` a executa no setup: sem ela a resposta é um `E0084`, que
+manda procurar defeito no cadastro da empresa quando o que falta é a migração do município inteiro.
+O valor `-1` está no enum e nunca foi observado, então tudo que não for `1` conta como "ainda não".
+
 `E0084` é rejeição comum e bem documentada por TecnoSpeed, TOTVS e pelo fórum do ACBr; a orientação
 que todos repetem é conferir a habilitação do contribuinte na interface do Emissor Nacional, não
 mexer no documento. O pré-requisito citado é **Cadastro Municipal de Contribuinte (CMC/IM) válido**

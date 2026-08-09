@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.List;
 import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -57,6 +58,50 @@ class ParametrosMunicipaisIT {
                 DpsDeTeste.codigoServico(), System.getProperty("nfse.servico.municipal", "000"));
 
         System.out.println("[setup] Município : " + municipio);
+    }
+
+    /**
+     * Compara o convênio de vários municípios para descobrir o que significa o
+     * {@code situacaoEmissaoPadraoContribuintesRFB}.
+     *
+     * <p>A Swagger declara o enum como {@code 0, 1, -1} e <b>não documenta os valores</b>. São
+     * Paulo responde {@code aderenteEmissorNacional: 1} — o município aderiu — mas
+     * {@code situacaoEmissaoPadraoContribuintesRFB: 0}, e é lá que a emissão morre com
+     * {@code E0084}. Comparar com municípios que comprovadamente emitem pelo Emissor Nacional é o
+     * que permite ler esse campo como "os contribuintes deste município já podem emitir pelo
+     * padrão nacional" em vez de adivinhar.
+     *
+     * <p>Só leitura. As chamadas são espaçadas porque o ADN aplica limite de ritmo e responde 429
+     * em HTML depois de duas seguidas.
+     */
+    @Test
+    void situacaoEmissaoPadraoRFB_comparadaEntreMunicipios() throws Exception {
+        record Alvo(String codigo, String nome) {
+        }
+        List<Alvo> alvos = List.of(
+                new Alvo("3550308", "São Paulo/SP — mantém emissor próprio"),
+                new Alvo("1200104", "Brasiléia/AC"),
+                new Alvo("4310330", "Imbé/RS"),
+                new Alvo("3136702", "Juiz de Fora/MG"),
+                new Alvo("3303302", "Niterói/RJ"),
+                new Alvo("3143302", "Montes Claros/MG"));
+
+        System.out.println();
+        System.out.printf("%-9s %-38s %-9s %-8s %s%n",
+                "código", "município", "emissor", "situação", "ambiente");
+        for (Alvo alvo : alvos) {
+            try {
+                ConvenioResponse c = parametros.consultarConvenio(ambiente, alvo.codigo());
+                System.out.printf("%-9s %-38s %-9s %-8s %s%n",
+                        alvo.codigo(), alvo.nome(),
+                        c.aderenteEmissorNacional(),
+                        c.situacaoEmissaoPadraoContribuintesRFB(),
+                        c.aderenteAmbienteNacional());
+            } catch (Exception e) {
+                System.out.printf("%-9s %-38s %s%n", alvo.codigo(), alvo.nome(), e.getMessage());
+            }
+            Thread.sleep(3000);
+        }
     }
 
     @Test

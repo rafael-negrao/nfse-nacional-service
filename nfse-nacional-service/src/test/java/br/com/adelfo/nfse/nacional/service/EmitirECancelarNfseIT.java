@@ -10,6 +10,7 @@ import br.com.adelfo.nfse.nacional.service.dto.request.EmissaoRequest;
 import br.com.adelfo.nfse.nacional.service.dto.response.CancelamentoResponse;
 import br.com.adelfo.nfse.nacional.service.dto.response.ConsultaEventoResponse;
 import br.com.adelfo.nfse.nacional.service.dto.response.ConsultaNfseResponse;
+import br.com.adelfo.nfse.nacional.service.dto.response.ConvenioResponse;
 import br.com.adelfo.nfse.nacional.service.dto.response.EmissaoResponse;
 import br.com.adelfo.nfse.nacional.service.exception.NfseException;
 import org.junit.jupiter.api.BeforeAll;
@@ -191,10 +192,49 @@ class EmitirECancelarNfseIT {
         System.out.println("[setup] Tomador     : " + tomador.cnpj() + " — " + tomador.nome());
         System.out.println("[setup] Município   : " + DpsDeTeste.municipio());
         System.out.println("[setup] Referência  : NFS-e " + NFSE_REFERENCIA);
+
+        conferirHabilitacaoDoMunicipio(httpClient);
         System.out.println("[setup] Competência : " + competencia());
         System.out.println("[setup] Série       : " + DpsDeTeste.serie());
         if (ambiente == TipoAmbiente.PRODUCAO) {
             System.out.println("[setup] *** PRODUÇÃO: a emissão gera um documento fiscal real ***");
+        }
+    }
+
+    /**
+     * Pré-voo: os contribuintes deste município já emitem pelo padrão nacional?
+     *
+     * <p>Sem esta conferência a resposta vem como {@code E0084} — "CNPJ do emitente prestador não
+     * possui estabelecimento…" —, que faz procurar erro no cadastro da empresa quando o que falta
+     * é a migração do município inteiro. Custa uma chamada e troca uma rejeição enganosa por um
+     * diagnóstico.
+     *
+     * <p>Note que {@code aderenteEmissorNacional} <b>não</b> serve aqui: São Paulo responde
+     * {@code true} e ainda assim recusa.
+     */
+    private static void conferirHabilitacaoDoMunicipio(NfseHttpClient httpClient) {
+        try {
+            ConvenioResponse convenio = new ParametrosMunicipaisServiceImpl(httpClient)
+                    .consultarConvenio(ambiente, DpsDeTeste.municipio());
+
+            System.out.println("[setup] Convênio    : aderenteEmissorNacional="
+                    + convenio.aderenteEmissorNacional() + ", situação="
+                    + convenio.situacaoEmissaoPadraoContribuintesRFB()
+                    + " → contribuintes emitem pelo padrão nacional: "
+                    + convenio.contribuintesEmitemPeloPadraoNacional());
+
+            if (!convenio.contribuintesEmitemPeloPadraoNacional()) {
+                motivoIndisponibilidade = "o município " + DpsDeTeste.municipio()
+                        + " ainda não migrou seus contribuintes para o Emissor Nacional "
+                        + "(situacaoEmissaoPadraoContribuintesRFB="
+                        + convenio.situacaoEmissaoPadraoContribuintesRFB() + "). Nenhuma emissão "
+                        + "será aceita aqui, independentemente do CNPJ ou do documento";
+            }
+        } catch (Exception e) {
+            // O ADN limita o ritmo e cai em 429. Não é motivo para abortar: o pré-voo é
+            // conveniência, e a emissão continua sendo a fonte de verdade.
+            System.out.println("[setup] Convênio    : não foi possível consultar (" + e.getMessage()
+                    + "); seguindo assim mesmo");
         }
     }
 
@@ -266,6 +306,10 @@ class EmitirECancelarNfseIT {
     @Test
     @Order(1)
     void emitir_geraNfseComAChaveDeAcessoDe50Digitos() throws Exception {
+        // Não gasta número de DPS quando já se sabe que o município não aceita.
+        assumeTrue(motivoIndisponibilidade == null,
+                "Emissão impossível neste município — " + motivoIndisponibilidade);
+
         DpsBuilder builder = dpsEspelhandoAReferencia(DpsDeTeste.proximoNumeroDps());
         idDps = builder.id();
         String xmlDps = builder.build();
