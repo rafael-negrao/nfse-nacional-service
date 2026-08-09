@@ -250,6 +250,7 @@ mvn test -pl nfse-nacional-service -DfailIfNoTests=false \
 | `DanfseIT` | não — sonda o DANFSE |
 | `EmitirNfseIT`, `NfseServicosIT`, `ContratoSefinIT` | **sim — emitem documento fiscal** |
 | `EmitirECancelarNfseIT` | **sim** — emite espelhando uma NFS-e real, imprime o XML e cancela |
+| `ParametrosMunicipaisIT#saoPauloJaMigrouParaOEmissorNacional` | não — vigia a virada de São Paulo, que hoje bloqueia a emissão |
 
 Sem certificado, os testes são pulados via `assumeTrue`. Nenhuma senha aparece em código ou log.
 

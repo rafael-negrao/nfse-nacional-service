@@ -74,6 +74,42 @@ class ParametrosMunicipaisIT {
      * <p>Só leitura. As chamadas são espaçadas porque o ADN aplica limite de ritmo e responde 429
      * em HTML depois de duas seguidas.
      */
+    /**
+     * Vigia a virada de São Paulo para o Emissor Nacional.
+     *
+     * <p>A Adelfo só tem estabelecimento em São Paulo, e São Paulo manteve o emissor próprio: até
+     * a migração dos contribuintes, <b>toda</b> emissão por esta biblioteca é recusada com
+     * {@code E0084}, independentemente do documento. Não há o que corrigir no código — só o que
+     * esperar.
+     *
+     * <p>As datas divergem entre as fontes: a Resolução CGSN nº 189/2026 marca 01/09/2026 para os
+     * optantes do Simples, e a página da Prefeitura marca 01/01/2027. Em vez de apostar numa
+     * delas, este teste <b>pergunta ao ambiente</b>. Rode-o periodicamente: no dia em que a saída
+     * disser {@code LIBERADO}, o ciclo do {@link EmitirECancelarNfseIT} passa a valer.
+     *
+     * <p>Só leitura, uma chamada. Não falha quando ainda não migrou — o estado esperado hoje é
+     * "não migrou", e falhar por isso viraria ruído em qualquer execução de rotina.
+     */
+    @Test
+    void saoPauloJaMigrouParaOEmissorNacional() {
+        final String SAO_PAULO = "3550308";
+
+        ConvenioResponse c = parametros.consultarConvenio(ambiente, SAO_PAULO);
+        boolean liberado = c.contribuintesEmitemPeloPadraoNacional();
+
+        System.out.println();
+        System.out.println("=== São Paulo (" + SAO_PAULO + ") em " + ambiente + " ===");
+        System.out.println("aderenteEmissorNacional : " + c.aderenteEmissorNacional()
+                + "  (não basta — SP responde true e recusa)");
+        System.out.println("situação                : " + c.situacaoEmissaoPadraoContribuintesRFB());
+        System.out.println();
+        System.out.println(liberado
+                ? ">>> LIBERADO: São Paulo migrou. Rode o EmitirECancelarNfseIT."
+                : ">>> AINDA NÃO: emissão será recusada com E0084. Confira também a coluna "
+                        + "AderenteEmissorNacional da lista oficial de municípios aderentes, "
+                        + "que é a fonte de verdade.");
+    }
+
     @Test
     void situacaoEmissaoPadraoRFB_comparadaEntreMunicipios() throws Exception {
         record Alvo(String codigo, String nome) {

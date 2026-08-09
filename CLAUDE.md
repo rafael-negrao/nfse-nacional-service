@@ -114,8 +114,24 @@ Contribuintes, CNC, Parametrização e DANFSE — e nenhuma do Emissor Nacional,
 O `swagger/contribuintesissqn` redireciona para esse mesmo índice. A biblioteca já aponta para os
 endpoints certos.
 
-Emitir de fato exige um **município emissor com CNC povoado onde o CNPJ do certificado tenha
-estabelecimento** (`-Dnfse.municipio=`). O `EmitirECancelarNfseIT` escolhe o prestador pelo CNPJ do
+#### A consequência para este projeto
+
+**A Adelfo só tem estabelecimento em São Paulo**, e Comaho e MCamas — os outros dois certificados
+disponíveis — também são paulistanas. Não há como escolher outro município: emitir de fato exigiria
+um CNPJ estabelecido onde o Emissor Nacional já opera.
+
+Portanto **a validação das rotas de escrita está bloqueada até São Paulo migrar**, em 01/09/2026
+(Resolução CGSN nº 189/2026) ou 01/01/2027 (página da Prefeitura). Não é limitação da biblioteca:
+o documento passa pelo schema, chega às regras de negócio, e para numa condição cadastral do
+município.
+
+Em vez de apostar numa das datas, `ParametrosMunicipaisIT.saoPauloJaMigrouParaOEmissorNacional`
+pergunta ao ambiente e imprime `LIBERADO` ou `AINDA NÃO`. Rode-o periodicamente; no dia em que
+virar, o `EmitirECancelarNfseIT` passa a valer sem alterar uma linha de código.
+
+Se aparecer um cliente estabelecido em município de Emissor Nacional, o ciclo roda hoje mesmo:
+`-Dnfse.municipio=<IBGE>` e `-Dnfse.cert.p12=<certificado dele>`. A escolha de prestador e tomador
+sai do certificado. O `EmitirECancelarNfseIT` escolhe o prestador pelo CNPJ do
 certificado e usa a outra parte como tomador, então basta apontar `-Dnfse.cert.p12` para o
 certificado desejado. **Cancelar e manifestar seguem sem resposta da Sefin**,
 porque dependem de uma nota emitida.
