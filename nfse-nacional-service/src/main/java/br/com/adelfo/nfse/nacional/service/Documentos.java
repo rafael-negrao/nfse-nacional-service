@@ -3,8 +3,9 @@ package br.com.adelfo.nfse.nacional.service;
 /**
  * Normalização dos campos numéricos do leiaute.
  *
- * <p>O XSD tipa CNPJ, CPF, código de município, CEP, telefone e chave de acesso como sequências de
- * dígitos — {@code [0-9]{14}}, {@code [0-9]{7}} e assim por diante. Mas quem consome a biblioteca
+ * <p>O XSD tipa CPF, código de município, CEP e telefone como sequências de dígitos —
+ * {@code [0-9]{11}}, {@code [0-9]{7}} e assim por diante —, e CNPJ e chave de acesso como dígitos
+ * com as posições do CNPJ alfanuméricas. Mas quem consome a biblioteca
  * costuma ter esses dados formatados, vindos de cadastro ou de tela: {@code 06.169.966/0001-33},
  * {@code 01310-100}, {@code (11) 3000-0000}.
  *
@@ -32,32 +33,27 @@ public final class Documentos {
     }
 
     /**
-     * CNPJ com 14 dígitos, dígito verificador conferido.
+     * CNPJ com 14 posições, dígito verificador conferido ({@code E0911}).
      *
-     * <p><b>Sobre o CNPJ alfanumérico:</b> a IN RFB 2.229/2024 tornou as posições 1 a 12
-     * alfanuméricas a partir de julho de 2026. O leiaute da NFS-e <b>ainda não acompanhou</b> — o
-     * XSD v1.01, de fevereiro de 2026, tipa {@code TSCNPJ} como {@code [0-9]{14}}, e não há nota
-     * técnica sobre o assunto nas atualizações do portal. Enviar letras produziria XML recusado no
-     * schema, então aqui elas são barradas com essa explicação.
-     *
-     * <p>O cálculo do DV em {@link #digitoVerificadorCnpj(String)} já é o alfanumérico, que é
-     * compatível com o numérico: um dígito vale {@code ASCII − 48}, que é o próprio valor. Quando o
-     * leiaute mudar, basta afrouxar a checagem de formato.
+     * <p><b>CNPJ alfanumérico:</b> a IN RFB 2.229/2024 tornou as posições 1 a 12 alfanuméricas a
+     * partir de julho de 2026, e o schema da NT 009/2026 passou a tipar {@code TSCNPJ} como
+     * {@code [0-9A-Z]{14}}. As letras são aceitas e vão em maiúsculas; os dois dígitos
+     * verificadores continuam numéricos. O schema anterior, que ainda vale em produção até a
+     * virada da NT 009, recusaria letras — mas CNPJ alfanumérico só existe para inscrições novas.
      */
     public static String cnpj(String valor, String campo) {
-        String bruto = valor == null ? null : valor.trim();
-        if (bruto != null && bruto.matches(".*[A-Za-z].*")) {
-            throw new IllegalArgumentException(campo + ": o leiaute da NFS-e ainda exige CNPJ "
-                    + "somente numérico (TSCNPJ = [0-9]{14}); o CNPJ alfanumérico da IN RFB "
-                    + "2.229/2024 não é aceito pelo schema v1.01. Recebido \"" + valor + "\"");
-        }
-        String digitos = comTamanhoExato(valor, 14, campo, "CNPJ");
-        if (digitos == null) {
+        String limpo = alfanumerico(valor);
+        if (limpo == null) {
             return null;
         }
-        recusarRepetidos(digitos, campo, "CNPJ");
-        conferirDv(digitos, digitoVerificadorCnpj(digitos.substring(0, 12)), campo, "CNPJ");
-        return digitos;
+        if (!limpo.matches("[0-9A-Z]{12}[0-9]{2}")) {
+            throw new IllegalArgumentException(campo + ": CNPJ deve ter 12 posições alfanuméricas "
+                    + "seguidas de 2 dígitos verificadores; recebido \"" + valor + "\" ("
+                    + limpo.length() + " posições)");
+        }
+        recusarRepetidos(limpo, campo, "CNPJ");
+        conferirDv(limpo, digitoVerificadorCnpj(limpo.substring(0, 12)), campo, "CNPJ");
+        return limpo;
     }
 
     /** CPF com 11 dígitos, dígito verificador conferido ({@code E0913}). */
@@ -150,15 +146,15 @@ public final class Documentos {
 
     /** CPF (11) ou CNPJ (14) — usado onde o leiaute aceita os dois. */
     public static String cpfOuCnpj(String valor, String campo) {
-        String digitos = apenasDigitos(valor);
-        if (digitos == null) {
+        String limpo = alfanumerico(valor);
+        if (limpo == null) {
             return null;
         }
-        if (digitos.length() != 11 && digitos.length() != 14) {
-            throw new IllegalArgumentException(campo + " deve ser um CPF (11 dígitos) ou CNPJ (14); "
-                    + "recebido \"" + valor + "\" (" + digitos.length() + " dígitos)");
+        if (limpo.length() != 11 && limpo.length() != 14) {
+            throw new IllegalArgumentException(campo + " deve ser um CPF (11 dígitos) ou CNPJ (14 "
+                    + "posições); recebido \"" + valor + "\" (" + limpo.length() + " posições)");
         }
-        return digitos.length() == 11 ? cpf(digitos, campo) : cnpj(digitos, campo);
+        return limpo.length() == 11 ? cpf(limpo, campo) : cnpj(limpo, campo);
     }
 
     /** Código IBGE de município, 7 dígitos. */
@@ -172,16 +168,31 @@ public final class Documentos {
     }
 
     /**
-     * Chave de acesso de NFS-e: 50 dígitos, com o último conferido.
+     * Chave de acesso de NFS-e: 50 posições, com a última conferida.
      *
      * <p>{@code E0042} e {@code E0907} exigem a verificação do DV nas chaves referenciadas — de
      * NFS-e substituída e de NFS-e vinculada ao IBS/CBS. Conferir em toda chave que entra pega o
      * erro de digitação antes de virar rejeição.
+     *
+     * <p>Com a NT 009/2026 as 14 posições da inscrição federal podem trazer o CNPJ alfanumérico.
+     * Elas são as posições <b>10 a 23</b> — cMun (7) + ambGer (1) + tipo de inscrição (1) vêm
+     * antes —, como diz o {@code TSIdNFSe} ({@code NFS[0-9]{9}[0-9A-Z]{14}[0-9]{27}}).
+     *
+     * <p><b>Divergência no XSD da NT 009:</b> o {@code TSChaveNFSe} diz
+     * {@code [0-9]{6}([0-9A-Z]{14})[0-9]{30}}, letras nas posições 7 a 20. É o pattern da chave da
+     * <b>NF-e</b> (cUF 2 + AAMM 4 + CNPJ 14), copiado sem ajuste, e contradiz o próprio
+     * {@code TSIdNFSe}. Aqui vale o leiaute da chave; um CNPJ com letra na 12ª posição produziria
+     * chave que aquele pattern recusa, e isso é defeito do schema, não da chave.
      */
     public static String chaveAcesso(String valor, String campo) {
-        String digitos = comTamanhoExato(valor, 50, campo, "chave de acesso");
+        String digitos = alfanumerico(valor);
         if (digitos == null) {
             return null;
+        }
+        if (!digitos.matches("[0-9]{9}[0-9A-Z]{14}[0-9]{27}")) {
+            throw new IllegalArgumentException(campo + ": chave de acesso deve ter 50 posições, só "
+                    + "dígitos fora da inscrição federal (posições 10 a 23); recebido \"" + valor
+                    + "\" (" + digitos.length() + " posições)");
         }
         recusarRepetidos(digitos, campo, "chave de acesso");
         String esperado = String.valueOf(digitoVerificadorChaveAcesso(digitos.substring(0, 49)));
@@ -199,16 +210,21 @@ public final class Documentos {
      *
      * <p>Módulo 11 com pesos de 2 a 9 da direita para a esquerda; resto 0 ou 1 resulta em dígito 0.
      * É o mesmo algoritmo da chave da NF-e, e foi conferido contra uma NFS-e real de produção.
+     *
+     * <p>Letras do CNPJ alfanumérico valem {@code ASCII − 48}, como no DV do próprio CNPJ — que
+     * para dígitos é o valor de sempre. <b>Não confirmado para a NFS-e:</b> é a regra que a
+     * NF-e adotou para a chave com CNPJ alfanumérico, e nenhuma chave real com letras foi
+     * conferida ainda.
      */
     public static int digitoVerificadorChaveAcesso(String base) {
-        if (base == null || !base.matches("[0-9]{49}")) {
+        if (base == null || !base.matches("[0-9]{9}[0-9A-Z]{14}[0-9]{26}")) {
             throw new IllegalArgumentException(
-                    "a base da chave de acesso tem 49 dígitos; recebido: " + base);
+                    "a base da chave de acesso tem 49 posições; recebido: " + base);
         }
         int soma = 0;
         int peso = 2;
         for (int i = base.length() - 1; i >= 0; i--) {
-            soma += (base.charAt(i) - '0') * peso;
+            soma += (base.charAt(i) - 48) * peso;
             peso = peso == 9 ? 2 : peso + 1;
         }
         int resto = soma % 11;
@@ -237,6 +253,18 @@ public final class Documentos {
             return null;
         }
         String limpo = valor.replaceAll("\\D", "");
+        return limpo.isEmpty() ? null : limpo;
+    }
+
+    /**
+     * Remove a pontuação e passa para maiúsculas, preservando letras — para CNPJ e chave de
+     * acesso, que podem trazer o CNPJ alfanumérico.
+     */
+    private static String alfanumerico(String valor) {
+        if (valor == null) {
+            return null;
+        }
+        String limpo = valor.replaceAll("[^0-9A-Za-z]", "").toUpperCase(java.util.Locale.ROOT);
         return limpo.isEmpty() ? null : limpo;
     }
 

@@ -20,15 +20,14 @@ class IbsCbsBuilderTest {
     private static final String MUNICIPIO_SP = "3550308";
     private static final String CHAVE = "1".repeat(49) + "9";
 
-    private static void validar(String xml) throws Exception {
-        List<String> erros = ValidacaoXsd.erros("DPS_v1.01.xsd", xml).stream()
-                // Mesmo defeito de TSSerieDPS descrito em DpsBuilderTest.
-                .filter(m -> !m.contains("TSSerieDPS") && !m.contains("'serie'"))
-                .toList();
-        assertEquals(List.of(), erros, "XML deve ser válido no XSD oficial");
+    /** Serviço prestado sobre a pessoa, no estabelecimento do fornecedor — não envolve imóvel. */
+    private static final String INDOP_SEM_IMOVEL = "030101";
+
+    static void validar(String xml) throws Exception {
+        assertEquals(List.of(), ValidacaoXsd.erros("DPS_v1.01.xsd", xml), "XML deve ser válido no XSD oficial");
     }
 
-    private static DpsBuilder dps() {
+    static DpsBuilder dps() {
         return DpsBuilder.novo()
                 .ambiente(TipoAmbiente.PRODUCAO_RESTRITA)
                 .municipioEmissor(MUNICIPIO_SP)
@@ -46,8 +45,7 @@ class IbsCbsBuilderTest {
 
     private static IbsCbsBuilder minimo() {
         return IbsCbsBuilder.novo()
-                .nfseRegular()
-                .codigoIndicadorOperacao("020201")
+                .codigoIndicadorOperacao(INDOP_SEM_IMOVEL)
                 .destinatarioEhOProprioTomador()
                 .tributacao("000", "000001");
     }
@@ -58,18 +56,39 @@ class IbsCbsBuilderTest {
 
         validar(xml);
         assertTrue(xml.contains("<IBSCBS>"));
-        assertTrue(xml.contains("<finNFSe>0</finNFSe>"));
-        assertTrue(xml.contains("<cIndOp>020201</cIndOp>"));
-        assertTrue(xml.contains("<CST>000</CST>"));
-        assertTrue(xml.contains("<cClassTrib>000001</cClassTrib>"));
+        assertTrue(xml.contains("<cIndOp>" + INDOP_SEM_IMOVEL + "</cIndOp>"));
+        // NT 009: CST e cClassTrib vão direto em trib, e o gIBSCBS só sai quando há o que declarar.
+        assertTrue(xml.contains("<trib><CST>000</CST><cClassTrib>000001</cClassTrib></trib>"), xml);
+        assertFalse(xml.contains("<gIBSCBS>"), "sem crédito presumido nem tributação regular");
+    }
+
+    @Test
+    void finNFSe_ficaNaRaizDaInfDps_eNaoNoGrupo() throws Exception {
+        // NT 009: sem finNFSe na raiz a Sefin recusa com E1235, acusando o cLocEmi.
+        String xml = dps().ibsCbs(minimo()).build();
+
+        int finNfse = xml.indexOf("<finNFSe>0</finNFSe>");
+        assertTrue(finNfse > 0, "finNFSe é obrigatório na infDPS");
+        assertTrue(finNfse < xml.indexOf("<cLocEmi>"), "finNFSe vem antes do cLocEmi");
+        assertTrue(finNfse < xml.indexOf("<IBSCBS>"), "finNFSe não fica mais dentro do grupo IBS/CBS");
+        assertTrue(dps().build().contains("<finNFSe>0</finNFSe>"), "sai mesmo sem o grupo IBS/CBS");
+    }
+
+    @Test
+    void indicadorDeOperacao_eOpcional() throws Exception {
+        // NT 009: cIndOp virou 0-1; E0859 chega a proibi-lo quando não há tributação de IBS/CBS.
+        String xml = dps().ibsCbs(IbsCbsBuilder.novo()
+                .destinatarioEhOProprioTomador().tributacao("000", "000001")).build();
+
+        validar(xml);
+        assertFalse(xml.contains("cIndOp"));
     }
 
     @Test
     void grupoCompleto_eValidoNoSchema() throws Exception {
         String xml = dps().ibsCbs(IbsCbsBuilder.novo()
-                        .nfseRegular()
                         .naoEhUsoOuConsumoPessoal()
-                        .codigoIndicadorOperacao("020201")
+                        .codigoIndicadorOperacao(INDOP_SEM_IMOVEL)
                         .tipoOperacao("2")
                         .referenciaNfse(CHAVE)
                         .enteGovernamental("4")
@@ -83,6 +102,7 @@ class IbsCbsBuilderTest {
         validar(xml);
         assertTrue(xml.contains("<indDest>1</indDest>"));
         assertTrue(xml.contains("<refNFSe>" + CHAVE + "</refNFSe>"));
+        assertTrue(xml.contains("<gIBSCBS><cCredPres>00</cCredPres>"), xml);
         assertTrue(xml.contains("<CSTReg>000</CSTReg>"));
     }
 
@@ -120,19 +140,14 @@ class IbsCbsBuilderTest {
 
     @Test
     void camposObrigatoriosDoGrupo_saoValidadosComMensagemQueApontaOMetodo() {
-        IllegalStateException semIndOp = assertThrows(IllegalStateException.class,
-                () -> dps().ibsCbs(IbsCbsBuilder.novo()
-                        .destinatarioEhOProprioTomador().tributacao("000", "000001")).build());
-        assertTrue(semIndOp.getMessage().contains("codigoIndicadorOperacao"), semIndOp.getMessage());
-
         IllegalStateException semDest = assertThrows(IllegalStateException.class,
                 () -> dps().ibsCbs(IbsCbsBuilder.novo()
-                        .codigoIndicadorOperacao("020201").tributacao("000", "000001")).build());
+                        .codigoIndicadorOperacao(INDOP_SEM_IMOVEL).tributacao("000", "000001")).build());
         assertTrue(semDest.getMessage().contains("destinatario"), semDest.getMessage());
 
         IllegalStateException semCst = assertThrows(IllegalStateException.class,
                 () -> dps().ibsCbs(IbsCbsBuilder.novo()
-                        .codigoIndicadorOperacao("020201").destinatarioEhOProprioTomador()).build());
+                        .codigoIndicadorOperacao(INDOP_SEM_IMOVEL).destinatarioEhOProprioTomador()).build());
         assertTrue(semCst.getMessage().contains("CST"), semCst.getMessage());
     }
 
@@ -158,23 +173,24 @@ class IbsCbsBuilderTest {
     }
 
     // ---------------------------------------------------------------------------------------
-    // Subgrupo imóvel
+    // Subgrupo imóvel — reestruturado pela NT 009
     // ---------------------------------------------------------------------------------------
 
     @Test
     void imovelPorCib_eValidoNoSchema() throws Exception {
-        String xml = dps().ibsCbs(minimo().imovel(ImovelIbsCbs.porCib("12345678", "IM-001"))).build();
+        String xml = dps().ibsCbs(minimo().imovel(ImovelIbsCbs.de(MUNICIPIO_SP,
+                ImovelIbsCbs.UnidadeImobiliaria.porCib("12345678", "IM-001")))).build();
 
         validar(xml);
-        assertTrue(xml.contains("<cCIB>12345678</cCIB>"));
-        assertTrue(xml.contains("<inscImobFisc>IM-001</inscImobFisc>"));
+        assertTrue(xml.contains("<imovel><cMun>" + MUNICIPIO_SP + "</cMun>"), xml);
+        assertTrue(xml.contains("<gUnidImob><inscImobFisc>IM-001</inscImobFisc><cCIB>12345678</cCIB>"), xml);
     }
 
     @Test
-    void imovelPorEnderecoNacional_eValidoNoSchema() throws Exception {
-        String xml = dps().ibsCbs(minimo().imovel(ImovelIbsCbs.porEndereco(
-                ImovelIbsCbs.EnderecoImovel.nacional(
-                        "01310100", "Avenida Paulista", "1000", "Conj 51", "Bela Vista")))).build();
+    void imovelPorEndereco_eValidoNoSchema() throws Exception {
+        String xml = dps().ibsCbs(minimo().imovel(ImovelIbsCbs.de(MUNICIPIO_SP,
+                ImovelIbsCbs.UnidadeImobiliaria.porEndereco(new ImovelIbsCbs.EnderecoImovel(
+                        "01310-100", "Avenida Paulista", "1000", "Conj 51", "Bela Vista"))))).build();
 
         validar(xml);
         assertTrue(xml.contains("<CEP>01310100</CEP>"));
@@ -182,120 +198,88 @@ class IbsCbsBuilderTest {
     }
 
     @Test
-    void imovelPorEnderecoNoExterior_eValidoNoSchema() throws Exception {
-        String xml = dps().ibsCbs(minimo().imovel(ImovelIbsCbs.porEndereco(
-                ImovelIbsCbs.EnderecoImovel.exterior(
-                        "10001", "New York", "NY", "5th Avenue", "100", null, "Manhattan")))).build();
+    void variasUnidades_saemNaOrdem() throws Exception {
+        String xml = dps().ibsCbs(minimo().imovel(ImovelIbsCbs.de(MUNICIPIO_SP,
+                ImovelIbsCbs.UnidadeImobiliaria.porCib("11111111"),
+                ImovelIbsCbs.UnidadeImobiliaria.porCib("22222222")))).build();
 
         validar(xml);
-        assertTrue(xml.contains("<cEndPost>10001</cEndPost>"));
-        assertTrue(xml.contains("<xCidade>New York</xCidade>"));
+        assertTrue(xml.indexOf("11111111") < xml.indexOf("22222222"));
     }
 
     @Test
-    void imovel_exigeExatamenteUmaFormaDeIdentificacao() {
+    void locacaoComAjustes_eValidaNoSchema() throws Exception {
+        // gLocacao e gAjusteBCLocImoveis só valem no subitem 99.03 (E0936/E0937/E0939); o schema
+        // não sabe disso, então aqui só se confere a forma.
+        String xml = dps().ibsCbs(minimo().imovel(ImovelIbsCbs.locacao(MUNICIPIO_SP,
+                ImovelIbsCbs.Locacao.integral(new BigDecimal("3000.00")),
+                ImovelIbsCbs.UnidadeImobiliaria.porCib("12345678").comAjustes(
+                        new ImovelIbsCbs.AjusteLocacao("01", null, new BigDecimal("200.00")),
+                        new ImovelIbsCbs.AjusteLocacao("99", "Taxa de lixo", new BigDecimal("15.00"))))))
+                .build();
+
+        validar(xml);
+        assertTrue(xml.contains("<gLocacao><pCopropriedade>100.00</pCopropriedade><vTotOper>3000.00</vTotOper>"), xml);
+        assertTrue(xml.contains("<tpAjusteBCLocImoveis>01</tpAjusteBCLocImoveis>"));
+        assertTrue(xml.contains("<xTpAjusteBCLocImoveis>Taxa de lixo</xTpAjusteBCLocImoveis>"));
+    }
+
+    @Test
+    void ajusteDaLocacaoAcimaDoTotal_eRecusado() {
+        // E0966
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> ImovelIbsCbs.locacao(MUNICIPIO_SP, ImovelIbsCbs.Locacao.integral(new BigDecimal("100.00")),
+                        ImovelIbsCbs.UnidadeImobiliaria.porCib("12345678").comAjustes(
+                                new ImovelIbsCbs.AjusteLocacao("03", null, new BigDecimal("100.01")))));
+        assertTrue(e.getMessage().contains("E0966"), e.getMessage());
+    }
+
+    @Test
+    void descricaoDoAjusteDaLocacao_soNoTipo99() {
+        // E0949 / E0954
+        assertThrows(IllegalArgumentException.class,
+                () -> new ImovelIbsCbs.AjusteLocacao("99", null, BigDecimal.TEN));
+        assertThrows(IllegalArgumentException.class,
+                () -> new ImovelIbsCbs.AjusteLocacao("01", "não cabe", BigDecimal.TEN));
+    }
+
+    @Test
+    void copropriedade_vaiDe0a100() {
+        // E0940
+        assertThrows(IllegalArgumentException.class, () -> new ImovelIbsCbs.Locacao(
+                new BigDecimal("100.01"), BigDecimal.TEN, null, null, null));
+    }
+
+    @Test
+    void indicadoresDeOperacaoComImovel_exigemUnidade() {
+        // E0938: 020101, 020201 e 020301 identificam a unidade imobiliária.
+        IllegalStateException e = assertThrows(IllegalStateException.class,
+                () -> dps().ibsCbs(minimo().codigoIndicadorOperacao("020201")).build());
+        assertTrue(e.getMessage().contains("E0938"), e.getMessage());
+    }
+
+    @Test
+    void unidade_exigeExatamenteUmaFormaDeIdentificacao() {
         // O leiaute é uma escolha: ou CIB, ou endereço.
         assertThrows(IllegalArgumentException.class,
-                () -> new ImovelIbsCbs("IM-001", null, null));
+                () -> new ImovelIbsCbs.UnidadeImobiliaria("IM-001", null, null, null));
         assertThrows(IllegalArgumentException.class,
-                () -> new ImovelIbsCbs(null, "12345678", ImovelIbsCbs.EnderecoImovel.nacional(
-                        "01310100", "Rua", "1", null, "Centro")));
+                () -> new ImovelIbsCbs.UnidadeImobiliaria(null, "12345678", new ImovelIbsCbs.EnderecoImovel(
+                        "01310100", "Rua", "1", null, null), null));
     }
 
     @Test
     void codigoCib_temOitoCaracteres() {
         // E0933: 7 posições de código mais o dígito verificador.
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> ImovelIbsCbs.porCib("1234567"));
+                () -> ImovelIbsCbs.UnidadeImobiliaria.porCib("1234567"));
         assertTrue(e.getMessage().contains("E0933"), e.getMessage());
     }
 
-    // ---------------------------------------------------------------------------------------
-    // Subgrupo de reembolso, repasse e ressarcimento
-    // ---------------------------------------------------------------------------------------
-
-    private static DocumentoReembolso reembolso(BigDecimal valor) {
-        return new DocumentoReembolso("01", null, valor,
-                LocalDate.of(2026, 7, 20), LocalDate.of(2026, 7, 1),
-                DocumentoReembolso.DFeNacional.nfe("1".repeat(44)),
-                DocumentoReembolso.Fornecedor.porCnpj("98765432000198", "Fornecedor Ltda"));
-    }
-
     @Test
-    void reembolso_eValidoNoSchema() throws Exception {
-        String xml = dps().ibsCbs(minimo().reembolso(reembolso(new BigDecimal("250.00")))).build();
-
-        validar(xml);
-        assertTrue(xml.contains("<gReeRepRes>"));
-        assertTrue(xml.contains("<tpReeRepRes>01</tpReeRepRes>"));
-        assertTrue(xml.contains("<vlrReeRepRes>250.00</vlrReeRepRes>"));
-        assertTrue(xml.contains("<tipoChaveDFe>2</tipoChaveDFe>"));
-        assertTrue(xml.contains("<xNome>Fornecedor Ltda</xNome>"));
-    }
-
-    @Test
-    void reembolsoComDocumentoNaoFiscal_eValidoNoSchema() throws Exception {
-        String xml = dps().ibsCbs(minimo().reembolso(new DocumentoReembolso(
-                "99", "Outro reembolso por conta e ordem", new BigDecimal("100.00"),
-                LocalDate.of(2026, 7, 20), LocalDate.of(2026, 7, 1),
-                new DocumentoReembolso.DocumentoNaoFiscal("REC-42", "Recibo de despesa"), null))).build();
-
-        validar(xml);
-        assertTrue(xml.contains("<nDoc>REC-42</nDoc>"));
-        assertTrue(xml.contains("<xTpReeRepRes>Outro reembolso por conta e ordem</xTpReeRepRes>"));
-    }
-
-    @Test
-    void reembolsoAcimaDoValorDoServico_eRecusado() {
-        // E0953: o reembolso é parte do que foi cobrado, não pode superá-lo. O valor do serviço
-        // vive no DpsBuilder, então a conferência só acontece na montagem da DPS.
-        IllegalStateException e = assertThrows(IllegalStateException.class,
-                () -> dps().ibsCbs(minimo().reembolso(reembolso(new BigDecimal("1000.01")))).build());
-        assertTrue(e.getMessage().contains("E0953"), e.getMessage());
-    }
-
-    @Test
-    void descricaoDoTipo_soExisteNoTipo99() {
-        // E0952
-        assertThrows(IllegalArgumentException.class, () -> new DocumentoReembolso(
-                "01", "Descrição que não cabe", BigDecimal.TEN,
-                LocalDate.of(2026, 7, 20), LocalDate.of(2026, 7, 1),
-                new DocumentoReembolso.DocumentoNaoFiscal("1", "x"), null));
-
-        assertThrows(IllegalArgumentException.class, () -> new DocumentoReembolso(
-                "99", null, BigDecimal.TEN,
-                LocalDate.of(2026, 7, 20), LocalDate.of(2026, 7, 1),
-                new DocumentoReembolso.DocumentoNaoFiscal("1", "x"), null));
-    }
-
-    @Test
-    void emissaoAnteriorACompetencia_eRecusada() {
-        // E0950 / E0951
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> new DocumentoReembolso("01", null, BigDecimal.TEN,
-                        LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 20),
-                        new DocumentoReembolso.DocumentoNaoFiscal("1", "x"), null));
-        assertTrue(e.getMessage().contains("E0950"), e.getMessage());
-    }
-
-    @Test
-    void outroDocumentoFiscal_exigeCompetenciaAte2025() {
-        // E0942: é resquício do regime anterior à reforma.
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> new DocumentoReembolso("01", null, BigDecimal.TEN,
-                        LocalDate.of(2026, 7, 20), LocalDate.of(2026, 7, 1),
-                        new DocumentoReembolso.OutroDocumentoFiscal(MUNICIPIO_SP, "1", "Nota antiga"), null));
-        assertTrue(e.getMessage().contains("E0942"), e.getMessage());
-    }
-
-    @Test
-    void chaveDFe_temTamanhoConformeOTipo() {
-        // E0940: NFS-e tem 50 dígitos; NF-e e CT-e têm 44.
-        assertThrows(IllegalArgumentException.class,
-                () -> DocumentoReembolso.DFeNacional.nfe("1".repeat(49) + "9"));
-        assertThrows(IllegalArgumentException.class,
-                () -> DocumentoReembolso.DFeNacional.nfse("1".repeat(44)));
-        assertEquals(50, DocumentoReembolso.DFeNacional.nfse("1".repeat(49) + "9").chave().length());
+    void municipioDoImovel_eObrigatorio() {
+        // E0929
+        assertThrows(IllegalArgumentException.class, () -> ImovelIbsCbs.de(null));
     }
 
     @Test

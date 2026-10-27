@@ -19,11 +19,26 @@ v1.01, e o fluxo de assinatura/GZip/Base64/HTTP está implementado.
 `dpsXmlGZipB64`, `nfseXmlGZipB64`, `pedidoRegistroEventoXmlGZipB64`, `eventoXmlGZipB64`,
 `chaveAcesso`. As respostas de sucesso trazem ainda `idDps` e `alertas`, que a fachada hoje ignora.
 
-**A emissão foi exercitada pela primeira vez em 08/08/2026** (`EmitirECancelarNfseIT`), nos dois
-ambientes. O documento passa pelo schema e **chega às regras de negócio** — assinatura, GZip,
-Base64, transporte e tradução da rejeição estão validados de ponta a ponta contra a Sefin.
+**O ciclo de escrita está validado em produção restrita desde 27/10/2026**: `EmitirECancelarNfseIT`
+emitiu, consultou por chave, cancelou e consultou o evento de cancelamento — 4 de 4 — com o
+certificado da Adelfo em São Paulo. Duas notas de R$ 1,00 foram emitidas e canceladas
+(`…0126105597989607` e `…0226100127014831`). **Manifestação segue sem resposta da Sefin.**
 
-**A emissão em si esbarra no CNC de São Paulo, e isso vale também para produção.** Duas regras, a
+Três coisas tiveram de mudar para chegar lá, nesta ordem — cada uma só apareceu depois que a
+anterior foi resolvida:
+
+1. **Schema da NT 009/2026** — a Sefin de produção restrita passou a validar contra o pacote de
+   20/10/2026, e a DPS do leiaute de fevereiro voltava `E1235`. Ver "Leiaute da NT 009" abaixo.
+2. **`E0128`** — com `tpEmit = 1`, a DPS não pode trazer o endereço do prestador (nem nome, `E0121`,
+   nem NIF, `E0112`): a plataforma os tira do cadastro. O `DpsBuilder` agora barra os três.
+3. **`E0625`** — ME/EPP que apura ISSQN pelo Simples, sem retenção, não informa alíquota. A nota
+   de referência traz `0.00`, mas veio do sistema próprio da Prefeitura.
+
+**Produção continua bloqueada pelo CNC de São Paulo** (situação `0` em 27/10/2026), e a partir de
+01/12/2026 também exigirá o leiaute novo — que a biblioteca já usa. O histórico abaixo explica o
+bloqueio; em produção restrita ele **caiu** entre 09/08 e 27/10/2026.
+
+**A emissão esbarrava no CNC de São Paulo, e isso ainda vale para produção.** Duas regras, a
 mesma causa: `E0120` ("IM do prestador não deve ser informado, pois **não existem informações
 complementares registradas no CNC NFS-e do município emissor**") e `E0084` ("CNPJ do emitente
 prestador não possui estabelecimento … conforme cadastros CNPJ e **CNC NFS-e**").
@@ -120,28 +135,29 @@ endpoints certos.
 disponíveis — também são paulistanas. Não há como escolher outro município: emitir de fato exigiria
 um CNPJ estabelecido onde o Emissor Nacional já opera.
 
-Portanto **a validação das rotas de escrita está bloqueada até São Paulo migrar**, em 01/09/2026
-(Resolução CGSN nº 189/2026) ou 01/01/2027 (página da Prefeitura). Não é limitação da biblioteca:
-o documento passa pelo schema, chega às regras de negócio, e para numa condição cadastral do
-município.
+Por isso **a validação das rotas de escrita ficou bloqueada até São Paulo migrar**. Em produção
+restrita a situação virou `1` entre 09/08 e 27/10/2026, e a emissão passou; em produção, em
+27/10/2026, ainda era `0`. A data de 01/09/2026 (Resolução CGSN nº 189/2026) já passou sem efeito
+em produção; resta a de 01/01/2027 (página da Prefeitura).
 
 Em vez de apostar numa das datas, `ParametrosMunicipaisIT.saoPauloJaMigrouParaOEmissorNacional`
-pergunta ao ambiente e imprime `LIBERADO` ou `AINDA NÃO`. Rode-o periodicamente; no dia em que
-virar, o `EmitirECancelarNfseIT` passa a valer sem alterar uma linha de código.
+pergunta ao ambiente e imprime `LIBERADO` ou `AINDA NÃO`. Rode-o periodicamente — com
+`-Dnfse.ambiente=producao` para produção. Em produção restrita ele virou para `LIBERADO`, e o
+`EmitirECancelarNfseIT` passou depois dos três ajustes listados em "Estado".
 
 Se aparecer um cliente estabelecido em município de Emissor Nacional, o ciclo roda hoje mesmo:
 `-Dnfse.municipio=<IBGE>` e `-Dnfse.cert.p12=<certificado dele>`. A escolha de prestador e tomador
 sai do certificado. O `EmitirECancelarNfseIT` escolhe o prestador pelo CNPJ do
 certificado e usa a outra parte como tomador, então basta apontar `-Dnfse.cert.p12` para o
-certificado desejado. **Cancelar e manifestar seguem sem resposta da Sefin**,
-porque dependem de uma nota emitida.
+certificado desejado. **Cancelar já foi validado** (produção restrita, 27/10/2026); **manifestar
+segue sem resposta da Sefin**.
 
 Uma NFS-e real de produção já foi consultada e confirma decisões de implementação: a assinatura da
 Receita usa `rsa-sha1` + C14N + enveloped, o `<Signature>` sai **sem prefixo** e o namespace da
 NFS-e é o **default** — exatamente o que `XmlSigningService` e `MarshallerNfse` produzem.
 
-Falta: os eventos de município (que o contribuinte não emite), o módulo DANFSE e a validação das
-operações de escrita contra a Sefin.
+Falta: os eventos de município (que o contribuinte não emite), o módulo DANFSE, a manifestação
+contra a Sefin, e a emissão em produção (CNC de São Paulo).
 
 ## Projeto de referência
 
@@ -188,7 +204,14 @@ GroupId: `br.com.adelfo.nfse.nacional`. Pacote-raiz idem. O artefato pai chama-s
 - **Sefin e ADN têm cadeias de certificação distintas.** Um truststore montado só com a cadeia de
   um deles derruba as chamadas ao outro no handshake, e o erro chega como `IOException` genérico
   com cara de indisponibilidade. Use `comTruststoreCapturaDosServidores` quando o ITI não estiver
-  acessível.
+  acessível. Em 27/10/2026 os dois ADN servem certificado **Let's Encrypt** (`YR2` em produção,
+  `YR1` em produção restrita); a Sefin segue com SERPRO/GlobalSign. Ou seja: a cadeia ICP-Brasil
+  do ITI **não** cobre o ADN.
+- **O `HttpClient` do JDK falha com o ADN de produção** (`adn.nfse.gov.br`), em 27/10/2026: TLS 1.3
+  dá `SSLException: Tag mismatch`, e forçando TLS 1.2 vem `PKIX path building failed`, embora a
+  captura da cadeia funcione host a host. O mesmo pedido com `curl` e o mesmo certificado responde
+  200, e produção restrita funciona em Java. **Causa não isolada.** Antes de concluir que o ADN
+  está fora do ar, teste com `curl`.
 - **Envelope de erro da Sefin**, confirmado no ambiente:
   ```json
   { "tipoAmbiente": 2, "versaoAplicativo": "SefinNacional_1.6.0",
@@ -229,7 +252,14 @@ A resposta faz o caminho inverso. As rotas trafegam JSON; o documento fiscal em 
 | Consultar por DPS | `GET /dps/{id}`, `HEAD /dps/{id}` | GET só devolve a chave se o certificado for de um ator da nota; HEAD é liberado |
 | Cancelar | `POST /nfse/{chaveAcesso}/eventos` | evento `e101101`, síncrono |
 | Manifestar | `POST /nfse/{chaveAcesso}/eventos` | mesma rota; confirmação/rejeição do prestador, tomador ou intermediário |
-| Consultar um evento | `GET /nfse/{chaveAcesso}/eventos/{tipo}/{nSeq}` | **só esta forma existe**; sem o sequencial a rota responde 405 (aceita apenas POST) |
+| Consultar um evento | `GET /nfse/{chaveAcesso}/eventos/{tipo}/{nSeq}` | **só esta forma existe**; sem o sequencial a rota responde 405 (aceita apenas POST). **A resposta não segue a Swagger** — ver abaixo |
+
+**A consulta de evento diverge da Swagger**, confirmado em 27/10/2026. A especificação declara a
+mesma resposta do POST (`eventoXmlGZipB64`); o servidor devolve `eventos[]`, com `chaveAcesso`,
+`tipoEvento`, `numeroPedidoRegistroEvento`, `dataHoraRecebimento` e `arquivoXml` — e este com o
+GZip codificado em **Base64 duas vezes** (`SDRzSUFB…` é o Base64 de `H4sIAAA…`). Lendo só o campo da
+Swagger, o cancelamento recém-registrado voltava como "não encontrado".
+`NfseServiceImpl.xmlDoEventoConsultado` lê as duas formas.
 
 Fora da Sefin, no **ADN**, ficam os parâmetros municipais — ainda fora da fachada:
 
@@ -353,6 +383,8 @@ Demais regras que o builder documenta ou já respeita:
 
 | Código | Regra |
 |---|---|
+| `E0112`, `E0121`, `E0128` | Com `tpEmit = 1` o prestador **não** leva NIF, nome nem endereço — a plataforma os tira do cadastro. `E0128` chegou na primeira emissão que passou pelo schema; o `DpsBuilder` agora barra os três |
+| `E0625` | ME/EPP que apura ISSQN pelo Simples, sem retenção e sem benefício municipal, **não** informa alíquota. Não verificado no builder (depende do benefício municipal); o `EmitirECancelarNfseIT` deixou de mandar `0.00` |
 | `E0004` | O `Id` é a concatenação exata de `"DPS"` + cód. município **do endereço do emitente** + tipo de inscrição (1=CPF, 2=CNPJ) + inscrição federal + série + número |
 | `E0006` | `tpAmb` deve bater com o ambiente que recebeu a DPS |
 | `E0008` | `dhEmi` anterior ou igual ao processamento — data futura é rejeitada |
@@ -369,26 +401,25 @@ Demais regras que o builder documenta ou já respeita:
 O bloco IBS/CBS tem regras próprias (`E1530`+) que exigem valores batendo com os da Calculadora
 oficial — mais um motivo para o `DpsBuilder` ainda não preencher esse grupo.
 
-### CNPJ alfanumérico — o leiaute está atrasado
+### CNPJ alfanumérico
 
 A IN RFB 2.229/2024 tornou as posições 1 a 12 do CNPJ **alfanuméricas a partir de julho de 2026**.
 O DV segue módulo 11, mas cada caractere passa a valer `ASCII − 48` — `A` = 17, `B` = 18 e assim
 por diante.
 
-**O leiaute da NFS-e não acompanhou.** O XSD v1.01, de fevereiro de 2026, ainda tipa `TSCNPJ` como
-`[0-9]{14}`, e a página de atualizações do portal — cujos itens mais recentes são de 01/07/2026,
-24/04/2026 e 13/03/2026 — não menciona o assunto. Enviar letras hoje produz XML recusado no schema.
+**O schema da NT 009 (out/2026) acompanhou**: `TSCNPJ` é `[0-9A-Z]{14}`, e os Ids e chaves
+admitem letras nas posições da inscrição federal. `Documentos.cnpj(...)` aceita letras (normaliza
+para maiúsculas), confere o DV alfanumérico e exige os dois últimos caracteres numéricos.
 
-Como a biblioteca lida com isso:
+Duas ressalvas:
 
-- `Documentos.cnpj(...)` **barra letras**, com mensagem que explica que a limitação é do schema e
-  não da implementação;
-- `Documentos.digitoVerificadorCnpj(...)` **já implementa o cálculo alfanumérico**, que é
-  retrocompatível: para um dígito, `ASCII − 48` é o próprio valor, então a mesma rotina serve aos
-  dois formatos. Quando o leiaute mudar, basta afrouxar a checagem de formato.
-
-Vale acompanhar a página de atualizações: é uma mudança que chega com data marcada e vai exigir
-schema novo.
+- **`TSChaveNFSe` está errado no XSD.** Diz `[0-9]{6}([0-9A-Z]{14})[0-9]{30}` — letras nas posições
+  7 a 20, que é o padrão da chave da **NF-e** (cUF 2 + AAMM 4 + CNPJ 14). Na chave da NFS-e o CNPJ
+  ocupa as posições **10 a 23** (cMun 7 + ambGer 1 + tpInsc 1 vêm antes), como o próprio `TSIdNFSe`
+  (`NFS[0-9]{9}[0-9A-Z]{14}[0-9]{27}`) confirma. `Documentos.chaveAcesso` segue o leiaute da chave.
+- **O DV da chave com letras não está confirmado.** `digitoVerificadorChaveAcesso` usa
+  `ASCII − 48`, por analogia com o CNPJ e com a regra que a NF-e adotou; nenhuma chave real com
+  letras foi conferida.
 
 ### Tabelas de domínio geradas dos anexos
 
@@ -464,7 +495,9 @@ envia a NFS-e inteira.)
 
 Regras que o builder aplica:
 
-- `cIndOp` (6 dígitos, ANEXO_C), `indDest`, `CST` (3) e `cClassTrib` (6) são obrigatórios;
+- `indDest`, `CST` (3) e `cClassTrib` (6) são obrigatórios; `cIndOp` (6 dígitos, ANEXO_C) virou
+  **opcional** na NT 009, e `E0859` o proíbe quando não há tributação de IBS/CBS;
+- `E0938` — `cIndOp` 020101, 020201 e 020301 exigem unidade imobiliária;
 - `E0910` — o grupo do destinatário só existe quando `indDest = 1`;
 - `E0905` — `tpOper` 2 ou 3 exige NFS-e referenciada (fornecimento e pagamento em documentos
   distintos); até 99 referências;
@@ -472,17 +505,21 @@ Regras que o builder aplica:
 
 Subgrupos, em classes próprias porque têm regras densas:
 
-- **`ImovelIbsCbs`** — o leiaute é escolha entre **código CIB** (8 caracteres: 7 + DV, `E0933`) e
-  **endereço**, este nacional (CEP) ou no exterior (`E0934`). `E0931` torna o grupo obrigatório
-  para os subitens de serviços sobre imóveis; a lista está no ANEXO_I e a biblioteca não a
-  verifica, porque muda por versão.
-- **`DocumentoReembolso`** — reembolso, repasse e ressarcimento (`gReeRepRes`), até 1000 por nota.
-  O documento é uma `sealed interface` de três formas: DF-e do repositório nacional, outro
-  documento fiscal, ou documento não fiscal. Regras validadas: `E0940` (tamanho da chave — NFS-e
-  50, NF-e e CT-e 44), `E0942` (outro documento fiscal só com competência até 31/12/2025),
-  `E0950`/`E0951` (emissão ≥ competência), `E0952` (descrição do tipo só no tipo 99) e `E0953`
-  (o reembolso não supera o valor do serviço — conferido na montagem da DPS, que é onde o valor
-  do serviço existe).
+- **`ImovelIbsCbs`** — reestruturado pela NT 009: **município** obrigatório (`E0929`), grupo de
+  **locação** opcional (`gLocacao`, só no subitem 99.03 — `E0936`/`E0937`) e até 99 **unidades
+  imobiliárias**, cada uma com **CIB** (8 caracteres: 7 + DV, `E0933`) **ou endereço** — agora só
+  nacional — e, na locação, ajustes da BC do IBS/CBS (`E0944`, `E0949`/`E0954`, `E0966`). As regras
+  que dependem do `cTribNac` não são verificadas, porque o código vive no `DpsBuilder`.
+
+**Ajuste de base de cálculo — `DocumentoAjusteBC`, fora do grupo IBS/CBS.** A NT 009 fundiu a
+dedução do ISSQN (`vDedRed`) e o reembolso/repasse/ressarcimento do IBS/CBS (`gReeRepRes`) num só
+grupo, `infDPS/valores/vAjusteBC`. Por isso o documento saiu do `IbsCbsBuilder` e entra por
+`DpsBuilder.documentoAjusteBC(...)`; `deducaoPercentual`/`deducaoValor` viraram `pAjusteBCISSQN`/
+`vAjusteBCISSQN`. O tipo distingue os dois casos: `2`, `5`–`9` e `99` só ajustam o ISSQN;
+`101`–`105` e `199` são reembolsos (os antigos `01`–`04` e `99`). Regras do ANEXO_I de 20/10/2026:
+`E0453`, `E0460`, `E0462`, `E0464`/`E0465`, `E0467`, `E0469`, `E0470`, `E0472`, `E0476`, `E0479` e
+`E0492`/`E0498` (o fornecedor agora exige endereço). **Os códigos de rejeição mudaram** — `E0940`,
+que era o tamanho da chave do reembolso, hoje é o percentual de copropriedade.
 
 ### Eventos de manifestação
 
@@ -551,8 +588,30 @@ endpoint não se espalhe pelo código.
 
 ## Schemas
 
-Pacote oficial em `doc/schemas-oficiais/` (zip original preservado em `doc/`). Os XSDs efetivamente
-compilados estão em `nfse-nacional-schemas/src/main/resources/xsd/` — apenas a pasta `1.01`.
+Pacote oficial em `doc/schemas-oficiais/` (zips originais preservados em `doc/`). Os XSDs
+efetivamente compilados estão em `nfse-nacional-schemas/src/main/resources/xsd/`.
+
+### Leiaute da NT 009/2026 — o que está compilado
+
+Desde 27/10/2026 a biblioteca compila o pacote **`NFSe-ESQUEMAS_XSD-PRODREST-v1.01-20261020`**, da
+página "Documentação Técnica (Homologação/testes)" do gov.br — em `doc/schemas-oficiais/Schemas/
+1.01-prodrest-20261020/`. O de fevereiro continua em `Schemas/1.01/`.
+
+**Os arquivos continuam se chamando `v1.01`, mas o conteúdo mudou** (`tiposComplexos` e
+`tiposSimples`; os demais são idênticos). Não confie no número da versão para saber qual pacote a
+Sefin usa: a resposta é o `E1235`. Foi assim que a mudança apareceu — a DPS de fevereiro voltava
+`invalid child element 'cLocEmi' … expected: 'cMotivoEmisTI, finNFSe'`.
+
+Mudanças que afetam a biblioteca: `finNFSe` sai de `IBSCBS` e vira **obrigatório na raiz da
+`infDPS`**; `vDedRed` + `gReeRepRes` → `valores/vAjusteBC`; `CST`/`cClassTrib` sobem para
+`IBSCBS/valores/trib`, com `gIBSCBS` opcional; `cIndOp` opcional; `imovel` reestruturado;
+CNPJ alfanumérico; `xNome` do tomador opcional; `TSDesc*` recusam texto só de espaços.
+
+**Cronograma:** produção restrita desde ~21/10/2026; **produção em 01/12/2026**, segundo o
+comunicado do CGNFS-e (até lá, produção segue o leiaute da NT 004 v2.0). Uma issue no GitHub dizia
+03/11/2026 — vale o comunicado. A NT 009 tem mais releases: a próxima, prevista para 30/10/2026,
+move `indDest`/`dest` para a raiz da `infDPS`. **Este pacote ainda os tem em `IBSCBS`.** Quando o
+`E1235` voltar, compare com o pacote mais recente da mesma página.
 
 O `xjc` recebe **só os schemas raiz** (`DPS`, `NFSe`, `evento`, `pedRegEvento`); os `tipos*` entram
 via `xs:include` (mesmo targetNamespace). Listá-los explicitamente causa erro de definição
@@ -591,13 +650,11 @@ entra no conjunto porque `TCDPS` e `TCPedRegEvt` declaram `ds:Signature`, mesmo 
 Como a assinatura é calculada sobre a forma canônica, prefixo instável é defeito, não estética.
 Todo marshalling passa por `MarshallerNfse`, que fixa NFS-e como default e XMLDSig como `ds`.
 
-**Duas divergências deliberadas em relação ao pacote oficial:**
+**Uma divergência deliberada em relação ao pacote oficial** (a outra, o pattern quebrado do
+`TSSerieDPS` — `^0{0,4}\d{1,5}$`, com `^`/`$` literais —, foi corrigida pelo pacote da NT 009 para
+`[0-9]{1,4}|[0-8][0-9]{4}`, e o filtro dos testes saiu):
 
-1. `TSSerieDPS` (v1.01) traz o pattern `^0{0,4}\d{1,5}$`. Em XML Schema os patterns já são
-   implicitamente ancorados e `^`/`$` valem como caracteres literais — nenhuma série numérica o
-   satisfaz. A v1.00 não tinha pattern algum nesse tipo. O `DpsBuilder` emite a série numérica (o
-   que a Sefin aceita) e `DpsBuilderTest` filtra essa violação; veja `DEFEITO_TSSERIEDPS` lá.
-2. O `xmldsig-core-schema.xsd` compilado teve o `DOCTYPE` removido. O original referencia a DTD
+1. O `xmldsig-core-schema.xsd` compilado teve o `DOCTYPE` removido. O original referencia a DTD
    externa `http://www.w3.org/2001/XMLSchema.dtd`, e o W3C limita acessos automatizados — cada
    build e cada validação buscavam essa DTD na rede e falhavam de forma intermitente com
    `src-resolve: ds:Signature`, erro que não aponta para a causa. As entidades do subconjunto
@@ -612,7 +669,7 @@ Xerces falha de forma intermitente quando o módulo de schemas entra como jar.
 Java 21 e Maven 3.8+ (o Maven local já roda em 21 por padrão).
 
 ```bash
-mvn clean install              # build completo (137 testes), instala em ~/.m2
+mvn clean install              # build completo (160 testes), instala em ~/.m2
 TZ=UTC mvn clean install       # o servidor roda em UTC; rode assim antes de um deploy
 mvn clean install -DskipTests  # só empacota
 mvn clean compile              # regenera o JAXB do nfse-nacional-schemas

@@ -42,7 +42,7 @@ class DocumentosTest {
                 () -> Documentos.cnpj("06.169.966/0001-3", "prestadorCnpj"));
 
         assertTrue(e.getMessage().contains("prestadorCnpj"), e.getMessage());
-        assertTrue(e.getMessage().contains("13 dígitos"), e.getMessage());
+        assertTrue(e.getMessage().contains("13 posições"), e.getMessage());
     }
 
     @Test
@@ -94,14 +94,33 @@ class DocumentosTest {
     }
 
     @Test
-    void cnpjComLetras_eRecusadoEnquantoOLeiauteForNumerico() {
-        // O XSD v1.01 (fev/2026) ainda tipa TSCNPJ como [0-9]{14}, embora o CNPJ alfanumérico
-        // tenha entrado em vigor em julho/2026. Aceitar letras produziria XML inválido no schema.
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> Documentos.cnpj("12ABC34501DE35", "prestadorCnpj"));
+    void cnpjAlfanumerico_eAceitoComPontuacaoEMinusculas() {
+        // O schema da NT 009 (out/2026) tipa TSCNPJ como [0-9A-Z]{14}.
+        assertEquals("12ABC34501DE35", Documentos.cnpj("12.abc.345/01de-35", "prestadorCnpj"));
+        assertEquals("12ABC34501DE35", Documentos.cpfOuCnpj("12.ABC.345/01DE-35", "documento"));
+    }
 
-        assertTrue(e.getMessage().contains("alfanumérico"), e.getMessage());
-        assertTrue(e.getMessage().contains("TSCNPJ"), e.getMessage());
+    @Test
+    void cnpjAlfanumerico_temDvConferidoEDvSoNumerico() {
+        IllegalArgumentException dvErrado = assertThrows(IllegalArgumentException.class,
+                () -> Documentos.cnpj("12ABC34501DE36", "prestadorCnpj"));
+        assertTrue(dvErrado.getMessage().contains("dígito verificador"), dvErrado.getMessage());
+
+        IllegalArgumentException dvComLetra = assertThrows(IllegalArgumentException.class,
+                () -> Documentos.cnpj("12ABC34501DE3A", "prestadorCnpj"));
+        assertTrue(dvComLetra.getMessage().contains("2 dígitos verificadores"), dvComLetra.getMessage());
+    }
+
+    @Test
+    void chaveDeAcessoComCnpjAlfanumerico_eAceita() {
+        // Letras só nas posições do CNPJ: 10 a 23, depois de cMun (7), ambGer (1) e tpInsc (1).
+        String base = "3550308" + "1" + "2" + "12ABC34501DE35" + "0".repeat(26);
+        String chave = base + Documentos.digitoVerificadorChaveAcesso(base);
+
+        assertEquals(chave, Documentos.chaveAcesso(chave.toLowerCase(), "chSubstda"));
+        assertThrows(IllegalArgumentException.class,
+                () -> Documentos.chaveAcesso("A" + chave.substring(1), "chSubstda"),
+                "letra fora das posições do CNPJ");
     }
 
     @Test
@@ -164,10 +183,10 @@ class DocumentosTest {
                 .identificacao("1", "237", LocalDate.of(2026, 8, 1))
                 .prestadorCnpj("06.169.966/0001-33")
                 .prestadorContato("(11) 3000-0000", "fiscal@adelfo.com.br")
-                .prestadorEndereco(DpsBuilder.Endereco.nacional(
-                        "3550308", "01310-100", "Avenida Paulista", "1000", null, "Bela Vista"))
                 .naoOptanteSimplesNacional().semRegimeEspecial()
                 .tomadorCnpj("98.765.432/0001-98", "Cliente Exemplo")
+                .tomadorEndereco(DpsBuilder.Endereco.nacional(
+                        "3550308", "01310-100", "Avenida Paulista", "1000", null, "Bela Vista"))
                 .servicoPrestadoNoMunicipio("3550308")
                 .servico("010401", "Elaboracao de programa de computador")
                 .valorServico(new BigDecimal("1000.00"))

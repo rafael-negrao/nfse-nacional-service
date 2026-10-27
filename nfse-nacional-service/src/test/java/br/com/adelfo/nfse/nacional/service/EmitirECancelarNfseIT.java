@@ -276,26 +276,27 @@ class EmitirECancelarNfseIT {
                 .codigoTributacaoMunicipal("001")
                 .codigoNbs("999999999")
 
-                // --- valores: alíquota zero, ISSQN recolhido pelo Simples ----------------------
+                // --- valores: ISSQN recolhido pelo Simples ----------------------------------------
+                // Sem alíquota, embora a nota de referência traga 0.00. E0625 a recusa para ME/EPP
+                // que apura pelo Simples sem retenção — quem a define é a plataforma.
                 .valorServico(VALOR_SERVICO)
                 .issqnTributavel()
                 .issqnNaoRetido()
-                .aliquota(new BigDecimal("0.00"))
                 .totalTributos(new BigDecimal("0.00"), new BigDecimal("0.00"), new BigDecimal("0.00"));
 
-        return comEnderecoDoPrestador(dps);
+        return comContatoDoPrestador(dps);
     }
 
-    /** O endereço do prestador só entra quando se sabe de quem é o certificado. */
-    private static DpsBuilder comEnderecoDoPrestador(DpsBuilder dps) {
+    /**
+     * Só o contato do prestador entra. Nome e endereço a plataforma tira do cadastro, e recusa a
+     * DPS que os traz — {@code E0121} e {@code E0128}, esta recebida na primeira emissão que
+     * passou pelo schema, em 27/10/2026.
+     */
+    private static DpsBuilder comContatoDoPrestador(DpsBuilder dps) {
         if (prestador == null) {
             return dps;
         }
-        return dps
-                .prestadorEndereco(DpsBuilder.Endereco.nacional(
-                        DpsDeTeste.municipio(), prestador.cep(), prestador.logradouro(),
-                        prestador.numero(), null, prestador.bairro()))
-                .prestadorContato(null, prestador.email());
+        return dps.prestadorContato(null, prestador.email());
     }
 
     private static void exigeNfseEmitida() {

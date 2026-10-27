@@ -1,23 +1,18 @@
 package br.com.adelfo.nfse.nacional.service;
 
-import br.com.adelfo.nfse.nacional.schemas.TCEnderExtSimples;
-import br.com.adelfo.nfse.nacional.schemas.TCEnderObraEvento;
+import br.com.adelfo.nfse.nacional.schemas.TCEnderImovel;
 import br.com.adelfo.nfse.nacional.schemas.TCInfoRefNFSe;
-import br.com.adelfo.nfse.nacional.schemas.TCRTCInfoImovel;
-import br.com.adelfo.nfse.nacional.schemas.TCRTCInfoReeRepRes;
-import br.com.adelfo.nfse.nacional.schemas.TCRTCListaDoc;
-import br.com.adelfo.nfse.nacional.schemas.TCRTCListaDocDFe;
-import br.com.adelfo.nfse.nacional.schemas.TCRTCListaDocFiscalOutro;
-import br.com.adelfo.nfse.nacional.schemas.TCRTCListaDocFornec;
-import br.com.adelfo.nfse.nacional.schemas.TCRTCListaDocOutro;
 import br.com.adelfo.nfse.nacional.schemas.TCRTCInfoDest;
 import br.com.adelfo.nfse.nacional.schemas.TCRTCInfoIBSCBS;
-import br.com.adelfo.nfse.nacional.schemas.TCRTCInfoTributosIBSCBS;
+import br.com.adelfo.nfse.nacional.schemas.TCRTCInfoImovel;
+import br.com.adelfo.nfse.nacional.schemas.TCRTCInfoTribIBSCBS;
 import br.com.adelfo.nfse.nacional.schemas.TCRTCInfoTributosSitClas;
 import br.com.adelfo.nfse.nacional.schemas.TCRTCInfoTributosTribRegular;
 import br.com.adelfo.nfse.nacional.schemas.TCRTCInfoValoresIBSCBS;
+import br.com.adelfo.nfse.nacional.schemas.TCRTCLocacaoImovel;
+import br.com.adelfo.nfse.nacional.schemas.TCRTCUnidadesImobiliarias;
+import br.com.adelfo.nfse.nacional.schemas.TCRTCValoresBCImoveis;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,9 +26,13 @@ import java.util.List;
  *
  * <p>A consequência prática é boa: dá para preencher o grupo sem integrar com a Calculadora.
  *
+ * <p><b>O que a NT 009/2026 tirou daqui:</b> o {@code finNFSe} subiu para a raiz da
+ * {@code infDPS} — o {@link DpsBuilder} o preenche —, e os documentos de reembolso, repasse e
+ * ressarcimento ({@code gReeRepRes}) foram fundidos ao ajuste de base de cálculo em
+ * {@code valores/vAjusteBC}, que o {@link DpsBuilder} monta a partir de {@link DocumentoAjusteBC}.
+ *
  * <pre>
  * dpsBuilder.ibsCbs(IbsCbsBuilder.novo()
- *         .nfseRegular()
  *         .codigoIndicadorOperacao("000001")
  *         .destinatarioEhOProprioTomador()
  *         .tributacao("000", "000001")
@@ -42,10 +41,6 @@ import java.util.List;
  */
 public final class IbsCbsBuilder {
 
-    /** finNFSe = 0: NFS-e regular. É o único valor que a enumeração admite hoje. */
-    private static final String FIN_NFSE_REGULAR = "0";
-
-    private String finNFSe = FIN_NFSE_REGULAR;
     private String indFinal;
     private String cIndOp;
     private String tpOper;
@@ -63,20 +58,12 @@ public final class IbsCbsBuilder {
     private String cClassTribRegular;
 
     private ImovelIbsCbs imovel;
-    private final List<DocumentoReembolso> reembolsos = new ArrayList<>();
-    private BigDecimal valorServicoParaConferencia;
 
     private IbsCbsBuilder() {
     }
 
     public static IbsCbsBuilder novo() {
         return new IbsCbsBuilder();
-    }
-
-    /** finNFSe = 0 — o padrão. */
-    public IbsCbsBuilder nfseRegular() {
-        this.finNFSe = FIN_NFSE_REGULAR;
-        return this;
     }
 
     /** indFinal = 1: operação de uso ou consumo pessoal (art. 57). */
@@ -93,7 +80,11 @@ public final class IbsCbsBuilder {
 
     /**
      * Código indicador da operação de fornecimento — 6 dígitos, conforme o ANEXO_C
-     * ({@code doc/anexos/ANEXO_C-IndOp_IBSCBS-v1.01.xlsx}). Obrigatório no grupo.
+     * ({@code doc/anexos/ANEXO_C-IndOp_IBSCBS-v1.01.xlsx}).
+     *
+     * <p>Opcional desde a NT 009. {@code E0859} o <b>proíbe</b> quando a classificação tributária
+     * indica que não há tributação de IBS/CBS ({@code ind_gIBSCBS = 0}), e {@code E0938} torna as
+     * unidades imobiliárias obrigatórias para 020101, 020201 e 020301.
      */
     public IbsCbsBuilder codigoIndicadorOperacao(String cIndOp) {
         this.cIndOp = cIndOp;
@@ -183,39 +174,18 @@ public final class IbsCbsBuilder {
         return this;
     }
 
-    /**
-     * Bem imóvel a que a operação se refere. {@code E0931} torna este grupo obrigatório para os
-     * subitens de serviços sobre imóveis; ver {@link ImovelIbsCbs}.
-     */
+    /** Bens imóveis a que a operação se refere; ver {@link ImovelIbsCbs}. */
     public IbsCbsBuilder imovel(ImovelIbsCbs imovel) {
         this.imovel = imovel;
         return this;
     }
 
-    /**
-     * Documento de reembolso, repasse ou ressarcimento. Até 1000 por nota; cada chamada acrescenta
-     * um. Ver {@link DocumentoReembolso}.
-     */
-    public IbsCbsBuilder reembolso(DocumentoReembolso documento) {
-        reembolsos.add(documento);
-        return this;
-    }
-
     // =========================================================================================
-
-    /**
-     * Valor do serviço, informado pelo {@code DpsBuilder} para conferir a regra {@code E0953} — o
-     * reembolso não pode superá-lo. Fica fora da API pública porque o dado já está na DPS.
-     */
-    void conferirReembolsoContra(BigDecimal valorServico) {
-        this.valorServicoParaConferencia = valorServico;
-    }
 
     TCRTCInfoIBSCBS build() {
         validar();
 
         TCRTCInfoIBSCBS grupo = new TCRTCInfoIBSCBS();
-        grupo.setFinNFSe(finNFSe);
         grupo.setIndFinal(indFinal);
         grupo.setCIndOp(cIndOp);
         grupo.setTpOper(tpOper);
@@ -249,104 +219,82 @@ public final class IbsCbsBuilder {
         return dest;
     }
 
+    /**
+     * {@code CST} e {@code cClassTrib} vão direto em {@code trib} desde a NT 009; o
+     * {@code gIBSCBS}, que antes os carregava, ficou opcional e só sai quando há crédito presumido
+     * ou tributação regular a declarar.
+     */
     private TCRTCInfoValoresIBSCBS montarValores() {
-        TCRTCInfoTributosSitClas sitClas = new TCRTCInfoTributosSitClas();
-        sitClas.setCST(cst);
-        sitClas.setCClassTrib(cClassTrib);
-        sitClas.setCCredPres(cCredPres);
-        if (cstRegular != null) {
-            TCRTCInfoTributosTribRegular regular = new TCRTCInfoTributosTribRegular();
-            regular.setCSTReg(cstRegular);
-            regular.setCClassTribReg(cClassTribRegular);
-            sitClas.setGTribRegular(regular);
-        }
+        TCRTCInfoTribIBSCBS trib = new TCRTCInfoTribIBSCBS();
+        trib.setCST(cst);
+        trib.setCClassTrib(cClassTrib);
 
-        TCRTCInfoTributosIBSCBS trib = new TCRTCInfoTributosIBSCBS();
-        trib.setGIBSCBS(sitClas);
+        if (cCredPres != null || cstRegular != null) {
+            TCRTCInfoTributosSitClas sitClas = new TCRTCInfoTributosSitClas();
+            sitClas.setCCredPres(cCredPres);
+            if (cstRegular != null) {
+                TCRTCInfoTributosTribRegular regular = new TCRTCInfoTributosTribRegular();
+                regular.setCSTReg(cstRegular);
+                regular.setCClassTribReg(cClassTribRegular);
+                sitClas.setGTribRegular(regular);
+            }
+            trib.setGIBSCBS(sitClas);
+        }
 
         TCRTCInfoValoresIBSCBS valores = new TCRTCInfoValoresIBSCBS();
         valores.setTrib(trib);
-        if (!reembolsos.isEmpty()) {
-            TCRTCInfoReeRepRes grupo = new TCRTCInfoReeRepRes();
-            reembolsos.forEach(d -> grupo.getDocumentos().add(montarDocumento(d)));
-            valores.setGReeRepRes(grupo);
-        }
         return valores;
     }
 
     private TCRTCInfoImovel montarImovel() {
         TCRTCInfoImovel info = new TCRTCInfoImovel();
-        info.setInscImobFisc(imovel.inscricaoImobiliariaFiscal());
-        info.setCCIB(imovel.codigoCib());
-        if (imovel.endereco() != null) {
-            ImovelIbsCbs.EnderecoImovel e = imovel.endereco();
-            TCEnderObraEvento end = new TCEnderObraEvento();
-            if (e.cep() != null) {
+        info.setCMun(imovel.codigoMunicipio());
+
+        if (imovel.locacao() != null) {
+            ImovelIbsCbs.Locacao l = imovel.locacao();
+            TCRTCLocacaoImovel locacao = new TCRTCLocacaoImovel();
+            locacao.setPCopropriedade(DpsBuilder.decimal(l.percentualCopropriedade()));
+            locacao.setVTotOper(DpsBuilder.decimal(l.valorTotalOperacao()));
+            locacao.setVDescIncondTot(DpsBuilder.decimal(l.descontoIncondicionado()));
+            locacao.setVDescCondTot(DpsBuilder.decimal(l.descontoCondicionado()));
+            locacao.setDVencOrig(l.vencimentoOriginal() == null ? null : l.vencimentoOriginal().toString());
+            info.setGLocacao(locacao);
+        }
+
+        for (ImovelIbsCbs.UnidadeImobiliaria u : imovel.unidades()) {
+            TCRTCUnidadesImobiliarias unidade = new TCRTCUnidadesImobiliarias();
+            unidade.setInscImobFisc(u.inscricaoImobiliariaFiscal());
+            unidade.setCCIB(u.codigoCib());
+            if (u.endereco() != null) {
+                ImovelIbsCbs.EnderecoImovel e = u.endereco();
+                TCEnderImovel end = new TCEnderImovel();
                 end.setCEP(e.cep());
-            } else {
-                TCEnderExtSimples ext = new TCEnderExtSimples();
-                ext.setCEndPost(e.codigoPostalExterior());
-                ext.setXCidade(e.cidadeExterior());
-                ext.setXEstProvReg(e.regiaoExterior());
-                end.setEndExt(ext);
+                end.setXLgr(e.logradouro());
+                end.setNro(e.numero());
+                end.setXCpl(e.complemento());
+                end.setXBairro(e.bairro());
+                unidade.setEnd(end);
             }
-            end.setXLgr(e.logradouro());
-            end.setNro(e.numero());
-            end.setXCpl(e.complemento());
-            end.setXBairro(e.bairro());
-            info.setEnd(end);
+            for (ImovelIbsCbs.AjusteLocacao a : u.ajustes()) {
+                TCRTCValoresBCImoveis ajuste = new TCRTCValoresBCImoveis();
+                ajuste.setTpAjusteBCLocImoveis(a.tipo());
+                ajuste.setXTpAjusteBCLocImoveis(a.descricao());
+                ajuste.setVAjusteBCLocImoveis(DpsBuilder.decimal(a.valor()));
+                unidade.getGAjusteBCLocImoveis().add(ajuste);
+            }
+            info.getGUnidImob().add(unidade);
         }
         return info;
     }
 
-    private static TCRTCListaDoc montarDocumento(DocumentoReembolso d) {
-        TCRTCListaDoc doc = new TCRTCListaDoc();
-        switch (d.documento()) {
-            case DocumentoReembolso.DFeNacional dfe -> {
-                TCRTCListaDocDFe alvo = new TCRTCListaDocDFe();
-                alvo.setTipoChaveDFe(dfe.tipoChave());
-                alvo.setXTipoChaveDFe(dfe.descricaoTipoChave());
-                alvo.setChaveDFe(dfe.chave());
-                doc.setDFeNacional(alvo);
-            }
-            case DocumentoReembolso.OutroDocumentoFiscal outro -> {
-                TCRTCListaDocFiscalOutro alvo = new TCRTCListaDocFiscalOutro();
-                alvo.setCMunDocFiscal(outro.codigoMunicipio());
-                alvo.setNDocFiscal(outro.numero());
-                alvo.setXDocFiscal(outro.descricao());
-                doc.setDocFiscalOutro(alvo);
-            }
-            case DocumentoReembolso.DocumentoNaoFiscal naoFiscal -> {
-                TCRTCListaDocOutro alvo = new TCRTCListaDocOutro();
-                alvo.setNDoc(naoFiscal.numero());
-                alvo.setXDoc(naoFiscal.descricao());
-                doc.setDocOutro(alvo);
-            }
-        }
-        if (d.fornecedor() != null) {
-            TCRTCListaDocFornec fornec = new TCRTCListaDocFornec();
-            fornec.setCNPJ(d.fornecedor().cnpj());
-            fornec.setCPF(d.fornecedor().cpf());
-            fornec.setNIF(d.fornecedor().nif());
-            fornec.setXNome(d.fornecedor().nome());
-            doc.setFornec(fornec);
-        }
-        doc.setDtEmiDoc(d.dataEmissao().toString());
-        doc.setDtCompDoc(d.dataCompetencia().toString());
-        doc.setTpReeRepRes(d.tipo());
-        doc.setXTpReeRepRes(d.descricaoTipo());
-        doc.setVlrReeRepRes(d.valor().setScale(2, java.math.RoundingMode.HALF_UP).toPlainString());
-        return doc;
-    }
-
     private void validar() {
-        if (cIndOp == null || !cIndOp.matches("[0-9]{6}")) {
+        if (cIndOp != null && !cIndOp.matches("[0-9]{6}")) {
             throw new IllegalStateException(
-                    "informe o código indicador da operação com 6 dígitos, conforme o ANEXO_C "
+                    "o código indicador da operação tem 6 dígitos, conforme o ANEXO_C "
                             + "(codigoIndicadorOperacao); recebido: " + cIndOp);
         }
         // E0901: o código precisa constar na tabela do ANEXO_C.
-        if (!TabelaIndicadoresOperacao.existe(cIndOp)) {
+        if (cIndOp != null && !TabelaIndicadoresOperacao.existe(cIndOp)) {
             throw new IllegalStateException(
                     "cIndOp " + cIndOp + " não consta na tabela de indicadores de operação ("
                             + TabelaIndicadoresOperacao.VERSAO_ANEXO + ") — E0901");
@@ -377,19 +325,11 @@ public final class IbsCbsBuilder {
             throw new IllegalStateException(
                     "o grupo de tributação regular exige CST e cClassTrib (tributacaoRegular)");
         }
-        if (reembolsos.size() > 1000) {
-            throw new IllegalStateException(
-                    "no máximo 1000 documentos de reembolso; informados: " + reembolsos.size());
-        }
-        // E0953: o reembolso é parte do que foi cobrado, então não pode ultrapassar o serviço.
-        if (valorServicoParaConferencia != null) {
-            for (DocumentoReembolso d : reembolsos) {
-                if (d.valor().compareTo(valorServicoParaConferencia) > 0) {
-                    throw new IllegalStateException(
-                            "o valor de reembolso " + d.valor() + " supera o valor do serviço "
-                                    + valorServicoParaConferencia + " (E0953)");
-                }
-            }
+        // E0938: operações com unidade imobiliária precisam identificá-la.
+        if (cIndOp != null && cIndOp.matches("020101|020201|020301")
+                && (imovel == null || imovel.unidades().isEmpty())) {
+            throw new IllegalStateException("com cIndOp " + cIndOp
+                    + " é obrigatório informar as unidades imobiliárias (imovel) — E0938");
         }
     }
 

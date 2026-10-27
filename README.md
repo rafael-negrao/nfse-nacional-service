@@ -13,15 +13,17 @@ outra configuração é obrigatória.
 | | |
 |---|---|
 | Consultas | **validadas contra o ambiente real**, produção e produção restrita |
-| Emissão | **exercitada contra a Sefin** nos dois ambientes: passa pelo schema e chega às regras de negócio; para no CNC do município, não no documento |
-| Cancelamento e manifestação | implementados e validados contra os XSDs oficiais, **ainda sem resposta da Sefin** |
+| Emissão | **validada em produção restrita** (27/10/2026); em produção, ainda para no CNC de São Paulo |
+| Cancelamento | **validado em produção restrita**, inclusive a consulta do evento |
+| Manifestação | implementada e validada contra os XSDs oficiais, **ainda sem resposta da Sefin** |
+| Leiaute | **NT 009/2026** (pacote de 20/10/2026), que produção restrita já exige e produção passa a exigir em 01/12/2026 |
 | DANFSE | não implementado — o serviço está fora do ar e sem documentação publicada |
 
-O caminho de escrita — assinatura XMLDSig, GZip, Base64, transporte e tradução da rejeição — está
-validado de ponta a ponta contra a Sefin. O que falta é administrativo: o **município emissor
-precisa ter o CNC NFS-e povoado** e o CNPJ precisa ter estabelecimento nele (`E0120`, `E0084`).
-São Paulo não atende a isso em nenhum dos dois ambientes — a cidade opera o sistema próprio dela.
-Cancelamento e manifestação dependem de uma nota emitida e por isso seguem sem resposta real.
+O ciclo de escrita — emitir, consultar, cancelar e consultar o evento — está validado de ponta a
+ponta contra a Sefin de produção restrita. Em produção falta um passo administrativo: o
+**município emissor precisa ter o CNC NFS-e povoado** e o CNPJ precisa ter estabelecimento nele
+(`E0120`, `E0084`). Em 27/10/2026 São Paulo já atendia a isso em produção restrita, mas não em
+produção.
 
 ---
 
@@ -228,7 +230,7 @@ diagnóstico.
 ## Testes
 
 ```bash
-mvn clean install        # 137 testes, sem rede nem certificado
+mvn clean install        # 160 testes, sem rede nem certificado
 ```
 
 Os testes de integração terminam em `IT` e **não rodam no build** — batem em ambiente real e
@@ -250,7 +252,7 @@ mvn test -pl nfse-nacional-service -DfailIfNoTests=false \
 | `DanfseIT` | não — sonda o DANFSE |
 | `EmitirNfseIT`, `NfseServicosIT`, `ContratoSefinIT` | **sim — emitem documento fiscal** |
 | `EmitirECancelarNfseIT` | **sim** — emite espelhando uma NFS-e real, imprime o XML e cancela |
-| `ParametrosMunicipaisIT#saoPauloJaMigrouParaOEmissorNacional` | não — vigia a virada de São Paulo, que hoje bloqueia a emissão |
+| `ParametrosMunicipaisIT#saoPauloJaMigrouParaOEmissorNacional` | não — vigia a virada de São Paulo; já virou em produção restrita, use `-Dnfse.ambiente=producao` |
 
 Sem certificado, os testes são pulados via `assumeTrue`. Nenhuma senha aparece em código ou log.
 
@@ -293,9 +295,12 @@ ambiente real — leitura recomendada antes de mexer no leiaute ou na assinatura
 
 ## Limitações conhecidas
 
-- **CNPJ alfanumérico** (IN RFB 2.229/2024, em vigor desde julho de 2026) **não é aceito**: o XSD
-  v1.01 ainda tipa `TSCNPJ` como `[0-9]{14}` e não há nota técnica da NFS-e sobre o assunto. O
-  cálculo do DV alfanumérico já está implementado, à espera do schema novo;
+- **o leiaute compilado é o da NT 009/2026** (produção restrita, 20/10/2026). Produção só o exige a
+  partir de 01/12/2026; até lá, uma DPS desta versão seria recusada no schema em produção;
+- **CNPJ alfanumérico** é aceito, como manda o schema da NT 009. O DV da *chave de acesso* com letras
+  segue a regra da NF-e por analogia e não foi conferido contra uma chave real;
+- a consulta ao **ADN de produção** falha no TLS pelo `HttpClient` do JDK (`Tag mismatch`), embora
+  responda pelo `curl` — causa ainda não isolada; produção restrita funciona;
 - as três rotas de alíquota do ADN respondem 400 para qualquer código de serviço, inclusive códigos
   reais — defeito do lado deles, reproduzido nos dois ambientes;
 - o DANFSE responde 503 em produção e 404 em produção restrita;

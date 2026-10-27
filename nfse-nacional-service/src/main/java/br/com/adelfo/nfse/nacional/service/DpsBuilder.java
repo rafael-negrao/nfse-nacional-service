@@ -9,13 +9,18 @@ import br.com.adelfo.nfse.nacional.schemas.TCEnderExt;
 import br.com.adelfo.nfse.nacional.schemas.TCEnderNac;
 import br.com.adelfo.nfse.nacional.schemas.TCExigSuspensa;
 import br.com.adelfo.nfse.nacional.schemas.TCInfDPS;
+import br.com.adelfo.nfse.nacional.schemas.TCDocAjusteBC;
+import br.com.adelfo.nfse.nacional.schemas.TCInfoAjusteBC;
 import br.com.adelfo.nfse.nacional.schemas.TCInfoCompl;
-import br.com.adelfo.nfse.nacional.schemas.TCInfoDedRed;
 import br.com.adelfo.nfse.nacional.schemas.TCInfoPessoa;
 import br.com.adelfo.nfse.nacional.schemas.TCInfoPrestador;
 import br.com.adelfo.nfse.nacional.schemas.TCInfoTributacao;
 import br.com.adelfo.nfse.nacional.schemas.TCInfoValores;
+import br.com.adelfo.nfse.nacional.schemas.TCListaDocAjusteBC;
 import br.com.adelfo.nfse.nacional.schemas.TCLocPrest;
+import br.com.adelfo.nfse.nacional.schemas.TCRTCListaDocDFe;
+import br.com.adelfo.nfse.nacional.schemas.TCRTCListaDocFiscalOutro;
+import br.com.adelfo.nfse.nacional.schemas.TCRTCListaDocOutro;
 import br.com.adelfo.nfse.nacional.schemas.TCRegTrib;
 import br.com.adelfo.nfse.nacional.schemas.TCServ;
 import br.com.adelfo.nfse.nacional.schemas.TCSubstituicao;
@@ -68,6 +73,9 @@ import java.time.format.DateTimeFormatter;
  *   <li>O {@code Id} tem 45 posições com série e número zero-preenchidos, enquanto os elementos
  *       {@code serie} e {@code nDPS} <b>não</b> admitem esse preenchimento.</li>
  *   <li>{@code dhEmi} não admite fração de segundos.</li>
+ *   <li>{@code finNFSe} é obrigatório na raiz da {@code infDPS} desde a NT 009/2026 — antes ficava
+ *       dentro do grupo IBS/CBS. Sem ele a Sefin recusa com {@code E1235}, apontando o
+ *       {@code cLocEmi} como "elemento inválido", o que não leva à causa.</li>
  *   <li>O grupo IBS/CBS da Reforma Tributária entra por {@link #ibsCbs(IbsCbsBuilder)}.</li>
  *   <li>Nenhum elemento pode sair com prefixo de namespace — {@code E1228} rejeita. Por isso todo
  *       marshalling passa por {@code MarshallerNfse}.</li>
@@ -83,6 +91,12 @@ public final class DpsBuilder {
 
     /** Formato de dhEmi (TSDateTimeUTC) — ver {@link DataHoraFiscal} para as armadilhas de fuso. */
     private static final DateTimeFormatter FORMATO_DATA_HORA = DataHoraFiscal.FORMATO;
+
+    /**
+     * {@code finNFSe = 0}: NFS-e regular, o único valor que {@code TSRTCFinNFSe} admite. As notas de
+     * crédito e débito (1 e 2) estão anunciadas na NT 009 e ainda não chegaram ao schema.
+     */
+    private static final String FIN_NFSE_REGULAR = "0";
 
     /** Tipo de inscrição federal usado na composição do Id da DPS. */
     private static final String INSCRICAO_CPF = "1";
@@ -137,6 +151,7 @@ public final class DpsBuilder {
     private BigDecimal descontoCondicionado;
     private BigDecimal percentualDeducao;
     private BigDecimal valorDeducao;
+    private final java.util.List<DocumentoAjusteBC> documentosAjuste = new java.util.ArrayList<>();
 
     // --- tributação municipal ----------------------------------------------------------------
     private String tribISSQN;
@@ -286,7 +301,10 @@ public final class DpsBuilder {
         return this;
     }
 
-    /** Prestador no exterior identificado por NIF. */
+    /**
+     * Prestador no exterior identificado por NIF. Só quando quem emite é o tomador ou o
+     * intermediário — {@code E0112} o recusa com {@code tpEmit = 1}.
+     */
     public DpsBuilder prestadorNif(String nif) {
         prestador.nif = nif;
         return this;
@@ -302,6 +320,10 @@ public final class DpsBuilder {
         return this;
     }
 
+    /**
+     * Nome do prestador. Só quando quem emite é o tomador ou o intermediário: com
+     * {@code tpEmit = 1} a plataforma o tira do cadastro, e {@code E0121} recusa a DPS que o traz.
+     */
     public DpsBuilder prestadorNome(String nomeRazaoSocial) {
         prestador.nome = nomeRazaoSocial;
         return this;
@@ -318,6 +340,11 @@ public final class DpsBuilder {
         return this;
     }
 
+    /**
+     * Endereço do prestador. Só quando quem emite é o tomador ou o intermediário, caso em que é
+     * obrigatório ({@code E0129}). Com {@code tpEmit = 1} a plataforma o tira do cadastro, e
+     * {@code E0128} recusa a DPS que o traz.
+     */
     public DpsBuilder prestadorEndereco(Endereco endereco) {
         prestador.endereco = endereco;
         return this;
@@ -565,17 +592,33 @@ public final class DpsBuilder {
         return this;
     }
 
-    /** Dedução/redução da base de cálculo por percentual. Exclui {@link #deducaoValor}. */
+    /**
+     * Ajuste (dedução/redução) da BC do ISSQN por percentual — {@code pAjusteBCISSQN}. Exclui
+     * {@link #deducaoValor}. {@code E0453}: maior que 0 e até 100%.
+     */
     public DpsBuilder deducaoPercentual(BigDecimal percentual) {
         this.percentualDeducao = percentual;
         this.valorDeducao = null;
         return this;
     }
 
-    /** Dedução/redução da base de cálculo por valor. Exclui {@link #deducaoPercentual}. */
+    /** Ajuste (dedução/redução) da BC do ISSQN por valor — {@code vAjusteBCISSQN}. Exclui {@link #deducaoPercentual}. */
     public DpsBuilder deducaoValor(BigDecimal valor) {
         this.valorDeducao = valor;
         this.percentualDeducao = null;
+        return this;
+    }
+
+    /**
+     * Documento que ajusta a base de cálculo: dedução do ISSQN ou reembolso, repasse e
+     * ressarcimento do IBS/CBS. Até 1000 por nota; cada chamada acrescenta um. Ver
+     * {@link DocumentoAjusteBC}.
+     *
+     * <p>Antes da NT 009 os reembolsos ficavam no grupo IBS/CBS; agora vivem aqui, em
+     * {@code valores/vAjusteBC/documentos}, ao lado da dedução do ISSQN.
+     */
+    public DpsBuilder documentoAjusteBC(DocumentoAjusteBC documento) {
+        documentosAjuste.add(java.util.Objects.requireNonNull(documento, "documento"));
         return this;
     }
 
@@ -819,6 +862,7 @@ public final class DpsBuilder {
         info.setDCompet(competencia.format(DateTimeFormatter.ISO_LOCAL_DATE));
         info.setTpEmit(tpEmit);
         info.setCMotivoEmisTI(cMotivoEmisTI);
+        info.setFinNFSe(FIN_NFSE_REGULAR);
         info.setChNFSeRej(chNFSeRejeitada);
         info.setCLocEmi(municipioEmissor);
         info.setSubst(montarSubstituicao());
@@ -828,8 +872,6 @@ public final class DpsBuilder {
         info.setServ(montarServico());
         info.setValores(montarValores());
         if (ibsCbs != null) {
-            // A conferência de E0953 precisa do valor do serviço, que vive aqui e não no grupo.
-            ibsCbs.conferirReembolsoContra(valorServico);
             info.setIBSCBS(ibsCbs.build());
         }
 
@@ -908,7 +950,7 @@ public final class DpsBuilder {
         return info;
     }
 
-    private static TCEndereco montarEndereco(Endereco endereco) {
+    static TCEndereco montarEndereco(Endereco endereco) {
         if (endereco == null) {
             return null;
         }
@@ -974,15 +1016,63 @@ public final class DpsBuilder {
             valores.setVDescCondIncond(descontos);
         }
 
-        if (percentualDeducao != null || valorDeducao != null) {
-            TCInfoDedRed dedRed = new TCInfoDedRed();
-            dedRed.setPDR(decimal(percentualDeducao));
-            dedRed.setVDR(decimal(valorDeducao));
-            valores.setVDedRed(dedRed);
+        if (percentualDeducao != null || valorDeducao != null || !documentosAjuste.isEmpty()) {
+            TCInfoAjusteBC ajuste = new TCInfoAjusteBC();
+            ajuste.setPAjusteBCISSQN(decimal(percentualDeducao));
+            ajuste.setVAjusteBCISSQN(decimal(valorDeducao));
+            if (!documentosAjuste.isEmpty()) {
+                TCListaDocAjusteBC lista = new TCListaDocAjusteBC();
+                documentosAjuste.forEach(d -> lista.getDocAjusteBC().add(montarDocumentoAjuste(d)));
+                ajuste.setDocumentos(lista);
+            }
+            valores.setVAjusteBC(ajuste);
         }
 
         valores.setTrib(montarTributacao());
         return valores;
+    }
+
+    private static TCDocAjusteBC montarDocumentoAjuste(DocumentoAjusteBC d) {
+        TCDocAjusteBC doc = new TCDocAjusteBC();
+        doc.setTpAjusteBC(d.tipo());
+        doc.setXTpAjusteBC(d.descricaoTipo());
+        doc.setVTotDoc(decimal(d.valorTotalDocumento()));
+        doc.setVAjusteAplic(decimal(d.valorAplicado()));
+        doc.setDtEmiDoc(d.dataEmissao() == null ? null : d.dataEmissao().toString());
+        doc.setDtCompDoc(d.dataCompetencia() == null ? null : d.dataCompetencia().toString());
+        switch (d.documento()) {
+            case DocumentoAjusteBC.DFeNacional dfe -> {
+                TCRTCListaDocDFe alvo = new TCRTCListaDocDFe();
+                alvo.setTipoChaveDFe(dfe.tipoChave());
+                alvo.setXTipoChaveDFe(dfe.descricaoTipoChave());
+                alvo.setChaveDFe(dfe.chave());
+                doc.setDFeNacional(alvo);
+            }
+            case DocumentoAjusteBC.OutroDocumentoFiscal outro -> {
+                TCRTCListaDocFiscalOutro alvo = new TCRTCListaDocFiscalOutro();
+                alvo.setCMunDocFiscal(outro.codigoMunicipio());
+                alvo.setNDocFiscal(outro.numero());
+                alvo.setXDocFiscal(outro.descricao());
+                doc.setDocFiscalOutro(alvo);
+            }
+            case DocumentoAjusteBC.DocumentoNaoFiscal naoFiscal -> {
+                TCRTCListaDocOutro alvo = new TCRTCListaDocOutro();
+                alvo.setNDoc(naoFiscal.numero());
+                alvo.setXDoc(naoFiscal.descricao());
+                doc.setDocOutro(alvo);
+            }
+        }
+        if (d.fornecedor() != null) {
+            DocumentoAjusteBC.Fornecedor f = d.fornecedor();
+            TCInfoPessoa fornec = new TCInfoPessoa();
+            fornec.setCNPJ(f.cnpj());
+            fornec.setCPF(f.cpf());
+            fornec.setNIF(f.nif());
+            fornec.setXNome(f.nome());
+            fornec.setEnd(montarEndereco(f.endereco()));
+            doc.setFornec(fornec);
+        }
+        return doc;
     }
 
     private TCInfoTributacao montarTributacao() {
@@ -1069,6 +1159,7 @@ public final class DpsBuilder {
             throw new IllegalStateException(
                     "informe a identificação do prestador (prestadorCnpj/prestadorCpf/prestadorNif/prestadorSemNif)");
         }
+        validarPrestadorEmitente();
         exigir(opSimpNac, "situação perante o Simples Nacional (naoOptanteSimplesNacional/optanteSimplesNacional…)");
         exigir(regEspTrib, "regime especial de tributação (semRegimeEspecial/regimeEspecial)");
 
@@ -1096,6 +1187,7 @@ public final class DpsBuilder {
         }
         exigir(tribISSQN, "tributação do ISSQN (issqnTributavel/issqnImunidade/issqnExportacao/issqnNaoIncidencia)");
         exigir(tpRetISSQN, "tipo de retenção do ISSQN (issqnNaoRetido/issqnRetidoPelo…)");
+        validarAjusteBC();
 
         boolean temTotalTributos = semTotalTributos || pTotTribSN != null
                 || (totTribFed != null && totTribEst != null && totTribMun != null);
@@ -1103,6 +1195,56 @@ public final class DpsBuilder {
             throw new IllegalStateException(
                     "informe o total aproximado de tributos (semTotalTributos/totalTributos/totalTributosPercentual/"
                             + "totalTributosSimplesNacional)");
+        }
+    }
+
+    /**
+     * Quando o prestador é o emitente, a plataforma preenche nome e endereço a partir do cadastro,
+     * e recusa a DPS que os informa. Barrar aqui troca a ida à Sefin por uma mensagem que diz o
+     * que remover — a rejeição {@code E0128} chegou assim na primeira emissão que passou pelo
+     * schema, em 27/10/2026.
+     */
+    private void validarPrestadorEmitente() {
+        if (!"1".equals(tpEmit)) {
+            return;
+        }
+        if (prestador.nif != null) {
+            throw new IllegalStateException("o prestador emitente não pode ser identificado por NIF (E0112)");
+        }
+        if (prestador.nome != null) {
+            throw new IllegalStateException("não informe o nome do prestador quando ele é o emitente "
+                    + "(prestadorNome): a plataforma o tira do cadastro — E0121");
+        }
+        if (prestador.endereco != null) {
+            throw new IllegalStateException("não informe o endereço do prestador quando ele é o emitente "
+                    + "(prestadorEndereco): a plataforma o tira do cadastro — E0128");
+        }
+    }
+
+    /** Regras do ajuste de BC que dependem de mais de um campo da DPS. */
+    private void validarAjusteBC() {
+        if (percentualDeducao != null && (percentualDeducao.signum() <= 0
+                || percentualDeducao.compareTo(new BigDecimal("100")) > 0)) {
+            throw new IllegalStateException(
+                    "o percentual de ajuste da BC do ISSQN deve ser maior que 0 e até 100 (E0453); recebido: "
+                            + percentualDeducao);
+        }
+        if (documentosAjuste.size() > 1000) {
+            throw new IllegalStateException(
+                    "no máximo 1000 documentos de ajuste de BC; informados: " + documentosAjuste.size());
+        }
+        boolean ajustePorPercentualOuValor = percentualDeducao != null || valorDeducao != null;
+        for (DocumentoAjusteBC d : documentosAjuste) {
+            // E0462: a dedução do ISSQN é por percentual/valor OU por documentos, não as duas.
+            if (ajustePorPercentualOuValor && d.exclusivoDoIssqn()) {
+                throw new IllegalStateException("documento de ajuste do tipo " + d.tipo()
+                        + " não pode acompanhar ajuste por percentual ou valor (E0462)");
+            }
+            // E0467: o ajuste é parte do que foi cobrado, então não pode ultrapassar o serviço.
+            if (d.valorAplicado().compareTo(valorServico) > 0) {
+                throw new IllegalStateException("o valor de ajuste " + d.valorAplicado()
+                        + " supera o valor do serviço " + valorServico + " (E0467)");
+            }
         }
     }
 
@@ -1135,7 +1277,7 @@ public final class DpsBuilder {
      * zero à esquerda e não admite sinal. Um {@code BigDecimal} de escala diferente de 2 passaria
      * batido em Java e só seria rejeitado pelo schema da Sefin.
      */
-    private static String decimal(BigDecimal valor) {
+    static String decimal(BigDecimal valor) {
         if (valor == null) {
             return null;
         }

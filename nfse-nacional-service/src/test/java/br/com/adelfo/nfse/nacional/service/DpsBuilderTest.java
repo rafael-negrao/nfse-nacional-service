@@ -28,31 +28,9 @@ class DpsBuilderTest {
     private static final String CNPJ = "12345678000195";
     private static final String MUNICIPIO_SP = "3550308";
 
-    /**
-     * Defeito do XSD oficial v1.01: {@code TSSerieDPS} usa o pattern {@code ^0{0,4}\d{1,5}$}, mas
-     * em XML Schema os patterns já são implicitamente ancorados e {@code ^} / {@code $} valem como
-     * caracteres literais. Nenhuma série numérica satisfaz esse pattern — só valores absurdos como
-     * {@code "^1$"}. A v1.00 não tinha pattern algum neste tipo.
-     *
-     * <p>O builder emite a série numérica, que é o que a Sefin de fato aceita; aqui a violação é
-     * filtrada para que o restante do schema continue guardando o leiaute. Quando o pacote oficial
-     * for corrigido, o filtro deixa de casar e os testes seguem passando.
-     */
-    private static final String DEFEITO_TSSERIEDPS = "TSSerieDPS";
-
-    /** Erros de schema do XML, descontado o defeito conhecido do {@code TSSerieDPS}. */
+    /** Erros de schema do XML contra o XSD oficial. */
     private static List<String> errosDeSchema(String xml) throws Exception {
-        return ValidacaoXsd.erros("DPS_v1.01.xsd", xml).stream()
-                .filter(msg -> !ehDefeitoTSSerieDPS(msg))
-                .toList();
-    }
-
-    /**
-     * O pattern quebrado produz duas mensagens: a violação do facet, que nomeia o tipo, e o erro
-     * de tipo em cascata, que nomeia o elemento.
-     */
-    private static boolean ehDefeitoTSSerieDPS(String mensagem) {
-        return mensagem.contains(DEFEITO_TSSERIEDPS) || mensagem.contains("'serie'");
+        return ValidacaoXsd.erros("DPS_v1.01.xsd", xml);
     }
 
     private static void validar(String xml) throws Exception {
@@ -85,10 +63,7 @@ class DpsBuilderTest {
     @Test
     void dpsCompleta_comTomadorEnderecoDescontosETributos_eValidaNoSchema() {
         String xml = dpsMinima()
-                .prestadorNome("Adelfo Sistemas Ltda")
                 .prestadorInscricaoMunicipal("123456")
-                .prestadorEndereco(DpsBuilder.Endereco.nacional(
-                        MUNICIPIO_SP, "01310100", "Avenida Paulista", "1000", "Conjunto 51", "Bela Vista"))
                 .prestadorContato("1130000000", "fiscal@adelfo.com.br")
                 .tomadorCnpj("98765432000198", "Cliente Exemplo S.A.")
                 .tomadorEndereco(DpsBuilder.Endereco.nacional(
@@ -107,6 +82,19 @@ class DpsBuilderTest {
         assertDoesNotThrow(() -> validar(xml));
         assertTrue(xml.contains("<xNome>Cliente Exemplo S.A.</xNome>"));
         assertTrue(xml.contains("<vDescIncond>50.00</vDescIncond>"));
+    }
+
+    @Test
+    void prestadorEmitente_naoLevaNomeNemEndereco() {
+        // E0121 e E0128: com tpEmit = 1 a plataforma tira nome e endereço do cadastro.
+        IllegalStateException nome = assertThrows(IllegalStateException.class,
+                () -> dpsMinima().prestadorNome("Adelfo Sistemas Ltda").build());
+        assertTrue(nome.getMessage().contains("E0121"), nome.getMessage());
+
+        IllegalStateException endereco = assertThrows(IllegalStateException.class,
+                () -> dpsMinima().prestadorEndereco(DpsBuilder.Endereco.nacional(
+                        MUNICIPIO_SP, "01310100", "Avenida Paulista", "1000", null, "Bela Vista")).build());
+        assertTrue(endereco.getMessage().contains("E0128"), endereco.getMessage());
     }
 
     @Test
@@ -232,14 +220,12 @@ class DpsBuilderTest {
     }
 
     @Test
-    void serieNumerica_violaOPatternQuebradoDoTSSerieDPS() throws Exception {
-        // Fixa o defeito do XSD oficial descrito em DEFEITO_TSSERIEDPS. Se este teste passar a
-        // falhar, o pacote de schemas foi corrigido e o filtro de errosDeSchema pode sair.
-        List<String> todosOsErros = ValidacaoXsd.erros("DPS_v1.01.xsd", dpsMinima().build());
-
-        assertFalse(todosOsErros.isEmpty(), "o pattern quebrado deveria acusar erro");
-        assertTrue(todosOsErros.stream().allMatch(DpsBuilderTest::ehDefeitoTSSerieDPS),
-                "só o defeito do TSSerieDPS era esperado: " + todosOsErros);
+    void serieNumerica_passaNoTSSerieDPSCorrigido() throws Exception {
+        // O pacote de fev/2026 trazia o pattern ^0{0,4}\d{1,5}$ — com ^ e $ literais, que nenhuma
+        // série numérica satisfazia, e os testes filtravam a violação. O pacote da NT 009
+        // (out/2026) o corrigiu para [0-9]{1,4}|[0-8][0-9]{4}; este teste garante que o filtro
+        // não precise voltar.
+        assertEquals(List.of(), ValidacaoXsd.erros("DPS_v1.01.xsd", dpsMinima().build()));
     }
 
     @Test

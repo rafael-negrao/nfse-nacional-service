@@ -31,8 +31,6 @@ class NfseDecisaoJudicialBuilderTest {
      * Violações de schema <b>esperadas</b> neste fluxo, que não indicam defeito do builder:
      *
      * <ul>
-     *   <li>{@code TSSerieDPS} — o pattern quebrado do XSD oficial, descrito em
-     *       {@link DpsBuilderTest};</li>
      *   <li>{@code TSNDFSe} — o manual do bypass manda {@code nDFSe="0"}, e o pattern do XSD não
      *       admite zero. Manual e schema se contradizem; prevalece o manual;</li>
      *   <li>{@code Signature} ausente — ao contrário da DPS, o XSD da NFS-e exige a assinatura.
@@ -41,8 +39,7 @@ class NfseDecisaoJudicialBuilderTest {
      * </ul>
      */
     private static boolean ehViolacaoEsperada(String mensagem) {
-        return mensagem.contains("TSSerieDPS") || mensagem.contains("'serie'")
-                || mensagem.contains("TSNDFSe") || mensagem.contains("'nDFSe'")
+        return mensagem.contains("TSNDFSe") || mensagem.contains("'nDFSe'")
                 || mensagem.contains("Signature");
     }
 

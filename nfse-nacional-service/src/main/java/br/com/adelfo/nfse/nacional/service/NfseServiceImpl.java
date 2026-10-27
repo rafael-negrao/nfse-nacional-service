@@ -37,6 +37,7 @@ import java.io.ByteArrayInputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
 /**
@@ -60,6 +61,9 @@ public class NfseServiceImpl implements NfseService {
     private static final String CAMPO_NFSE_ENVIO = "xmlGZipB64";
     private static final String CAMPO_EVENTO_ENVIO = "pedidoRegistroEventoXmlGZipB64";
     private static final String CAMPO_EVENTO_RETORNO = "eventoXmlGZipB64";
+    /** A consulta de evento não segue a Swagger; ver {@link #xmlDoEventoConsultado(JsonNode)}. */
+    private static final String CAMPO_EVENTOS_CONSULTA = "eventos";
+    private static final String CAMPO_EVENTO_ARQUIVO = "arquivoXml";
     private static final String CAMPO_CHAVE_ACESSO = "chaveAcesso";
 
     // Campos do lote de eventos do ADN, que usa PascalCase — ao contrário da Sefin, em camelCase.
@@ -179,7 +183,7 @@ public class NfseServiceImpl implements NfseService {
         try {
             JsonNode resposta = lerJson(httpClient.get(url));
             return new ConsultaEventoResponse(request.chaveAcesso(), request.tipoEvento(),
-                    request.sequencial(), xmlDeCampoGZip(resposta, CAMPO_EVENTO_RETORNO));
+                    request.sequencial(), xmlDoEventoConsultado(resposta));
         } catch (NfseHttpException e) {
             // 404 é resposta prevista na Swagger ("Nenhum evento encontrado para a NFS-e"), não
             // uma falha: consulta devolve estado.
@@ -411,6 +415,38 @@ public class NfseServiceImpl implements NfseService {
     private static String texto(JsonNode no, String campo) {
         JsonNode valor = no.get(campo);
         return valor == null || valor.isNull() ? null : valor.asText();
+    }
+
+    /**
+     * XML do evento na resposta de {@code GET /nfse/{chave}/eventos/{tipo}/{nSeq}}.
+     *
+     * <p><b>A rota não cumpre a Swagger.</b> A especificação declara a resposta do POST, com
+     * {@code eventoXmlGZipB64}; o servidor devolve {@code eventos[].arquivoXml}, e com o GZip
+     * codificado em Base64 <b>duas vezes</b> ({@code SDRzSUFB…} é o Base64 de {@code H4sIAAA…}).
+     * Confirmado em produção restrita em 27/10/2026, consultando o cancelamento da primeira nota
+     * emitida: lendo só o campo da Swagger, o evento recém-registrado voltava {@code null}, como
+     * se não existisse. O campo da Swagger continua aceito, para o dia em que a rota se corrigir.
+     */
+    static String xmlDoEventoConsultado(JsonNode resposta) {
+        JsonNode eventos = resposta.get(CAMPO_EVENTOS_CONSULTA);
+        if (eventos != null && eventos.isArray() && !eventos.isEmpty()) {
+            String arquivo = texto(eventos.get(0), CAMPO_EVENTO_ARQUIVO);
+            if (arquivo != null) {
+                return GZipBase64.descomprimir(semBase64Externo(arquivo));
+            }
+        }
+        return xmlDeCampoGZip(resposta, CAMPO_EVENTO_RETORNO);
+    }
+
+    /**
+     * Tira a camada extra de Base64, se houver. O teste é pelo cabeçalho do GZip ({@code 1f 8b}):
+     * presente após um decode, o valor já era GZip+Base64 simples e segue intacto.
+     */
+    private static String semBase64Externo(String valor) {
+        byte[] decodificado = Base64.getDecoder().decode(valor);
+        boolean jaEraGzip = decodificado.length >= 2
+                && (decodificado[0] & 0xff) == 0x1f && (decodificado[1] & 0xff) == 0x8b;
+        return jaEraGzip ? valor : new String(decodificado, StandardCharsets.US_ASCII);
     }
 
     private static String xmlDeCampoGZip(JsonNode no, String campo) {

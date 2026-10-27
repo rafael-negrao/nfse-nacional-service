@@ -81,11 +81,7 @@ class DataHoraFiscalTest {
     void dpsGeradaComJvmEmUtc_continuaValidaNoSchema() throws Exception {
         TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 
-        // Descontado o defeito conhecido do TSSerieDPS, que nenhuma série numérica satisfaz
-        // (ver DpsBuilderTest.DEFEITO_TSSERIEDPS) e que nada tem a ver com fuso.
-        List<String> erros = ValidacaoXsd.erros("DPS_v1.01.xsd", dpsEmitidaAgora()).stream()
-                .filter(msg -> !msg.contains("TSSerieDPS") && !msg.contains("'serie'"))
-                .toList();
+        List<String> erros = ValidacaoXsd.erros("DPS_v1.01.xsd", dpsEmitidaAgora());
 
         assertEquals(List.of(), erros,
                 "foi exatamente assim que o build quebrou no servidor de produção");
