@@ -207,11 +207,21 @@ GroupId: `br.com.adelfo.nfse.nacional`. Pacote-raiz idem. O artefato pai chama-s
   acessível. Em 27/10/2026 os dois ADN servem certificado **Let's Encrypt** (`YR2` em produção,
   `YR1` em produção restrita); a Sefin segue com SERPRO/GlobalSign. Ou seja: a cadeia ICP-Brasil
   do ITI **não** cobre o ADN.
-- **O `HttpClient` do JDK falha com o ADN de produção** (`adn.nfse.gov.br`), em 27/10/2026: TLS 1.3
-  dá `SSLException: Tag mismatch`, e forçando TLS 1.2 vem `PKIX path building failed`, embora a
-  captura da cadeia funcione host a host. O mesmo pedido com `curl` e o mesmo certificado responde
-  200, e produção restrita funciona em Java. **Causa não isolada.** Antes de concluir que o ADN
-  está fora do ar, teste com `curl`.
+- **O ADN de produção anuncia só as ACs raiz no `CertificateRequest`** (ICP-Brasil v5, v10, v11,
+  v12); produção restrita anuncia 176, intermediárias inclusive. O `KeyManager` padrão do JDK só
+  envia certificado cujo emissor, **dentro da cadeia guardada no `.pfx`**, esteja na lista — e o
+  `.pfx` da Adelfo traz só a folha (emitida pela `AC Certisign RFB G5`). Resultado: o JDK enviava
+  uma lista **vazia** e acusava `SSLException: Tag mismatch` ao decifrar o alerta do servidor, com
+  qualquer cifra — cara de defeito de ChaCha20 ou de rede, e não era nenhum dos dois. O `curl`
+  funcionava porque o OpenSSL envia o certificado de qualquer forma. `KeyManagerDoEmitente`
+  oferece o certificado ignorando a lista; só o `-Djavax.net.debug=ssl:handshake` mostra a causa
+  ("No X.509 cert selected"). Diagnosticado e corrigido em 27/10/2026.
+- **A captura de cadeia precisa tolerar a recusa do mTLS.** Em TLS 1.2 o servidor pede o
+  certificado do cliente durante o handshake, e o ADN de produção derruba a captura (que não
+  apresenta certificado) com `handshake_failure` — depois de já ter enviado a própria cadeia.
+  `capturarTruststoreDoServidor` aproveita a cadeia recebida; antes a descartava, e como
+  `comTruststoreCapturaDosServidores` engole a falha por host, o truststore saía sem o ADN e a
+  chamada real dava `PKIX path building failed`.
 - **Envelope de erro da Sefin**, confirmado no ambiente:
   ```json
   { "tipoAmbiente": 2, "versaoAplicativo": "SefinNacional_1.6.0",
@@ -669,7 +679,7 @@ Xerces falha de forma intermitente quando o módulo de schemas entra como jar.
 Java 21 e Maven 3.8+ (o Maven local já roda em 21 por padrão).
 
 ```bash
-mvn clean install              # build completo (160 testes), instala em ~/.m2
+mvn clean install              # build completo (165 testes), instala em ~/.m2
 TZ=UTC mvn clean install       # o servidor roda em UTC; rode assim antes de um deploy
 mvn clean install -DskipTests  # só empacota
 mvn clean compile              # regenera o JAXB do nfse-nacional-schemas

@@ -230,7 +230,7 @@ diagnóstico.
 ## Testes
 
 ```bash
-mvn clean install        # 160 testes, sem rede nem certificado
+mvn clean install        # 165 testes, sem rede nem certificado
 ```
 
 Os testes de integração terminam em `IT` e **não rodam no build** — batem em ambiente real e
@@ -299,8 +299,6 @@ ambiente real — leitura recomendada antes de mexer no leiaute ou na assinatura
   partir de 01/12/2026; até lá, uma DPS desta versão seria recusada no schema em produção;
 - **CNPJ alfanumérico** é aceito, como manda o schema da NT 009. O DV da *chave de acesso* com letras
   segue a regra da NF-e por analogia e não foi conferido contra uma chave real;
-- a consulta ao **ADN de produção** falha no TLS pelo `HttpClient` do JDK (`Tag mismatch`), embora
-  responda pelo `curl` — causa ainda não isolada; produção restrita funciona;
 - as três rotas de alíquota do ADN respondem 400 para qualquer código de serviço, inclusive códigos
   reais — defeito do lado deles, reproduzido nos dois ambientes;
 - o DANFSE responde 503 em produção e 404 em produção restrita;

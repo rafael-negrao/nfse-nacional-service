@@ -1,8 +1,10 @@
 package br.com.adelfo.nfse.nacional.client;
 
+import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509KeyManager;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -49,11 +51,20 @@ public class NfseHttpClient {
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             kmf.init(certificado.toKeyStore(), certificado.getSenha());
 
+            // O ADN de produção só anuncia as ACs raiz, e sem a cadeia no .pfx o KeyManager padrão
+            // deixa de enviar o certificado — o erro chega como "Tag mismatch". Ver KeyManagerDoEmitente.
+            KeyManager[] keyManagers = kmf.getKeyManagers();
+            for (int i = 0; i < keyManagers.length; i++) {
+                if (keyManagers[i] instanceof X509KeyManager x509) {
+                    keyManagers[i] = new KeyManagerDoEmitente(x509);
+                }
+            }
+
             TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
             tmf.init(certificado.toTrustStore());
 
             SSLContext ctx = SSLContext.getInstance("TLS");
-            ctx.init(kmf.getKeyManagers(), tmf.getTrustManagers(), new SecureRandom());
+            ctx.init(keyManagers, tmf.getTrustManagers(), new SecureRandom());
             return ctx;
         } catch (Exception e) {
             throw new IllegalStateException("Falha ao montar SSLContext mTLS a partir do certificado digital", e);

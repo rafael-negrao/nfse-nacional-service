@@ -339,6 +339,15 @@ public final class CertificadoDigital {
         try (SSLSocket socket = (SSLSocket) factory.createSocket(host, port)) {
             socket.setSoTimeout(15_000);
             socket.startHandshake();
+        } catch (javax.net.ssl.SSLException e) {
+            // A captura não apresenta certificado de cliente. Em TLS 1.2 o servidor pede o
+            // certificado durante o handshake, e o ADN de produção o recusa com handshake_failure
+            // — mas só depois de enviar a própria cadeia, que já está em cadeiaRef. Descartá-la
+            // aqui deixava o truststore sem o ADN, e a chamada real falhava com "PKIX path building
+            // failed". Em TLS 1.3 a recusa chega depois do handshake, e o problema não aparecia.
+            if (cadeiaRef.get() == null) {
+                throw e;
+            }
         }
 
         X509Certificate[] cadeia = cadeiaRef.get();
