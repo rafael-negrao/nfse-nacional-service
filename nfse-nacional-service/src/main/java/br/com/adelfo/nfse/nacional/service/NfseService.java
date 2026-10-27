@@ -1,5 +1,6 @@
 package br.com.adelfo.nfse.nacional.service;
 
+import br.com.adelfo.nfse.nacional.client.TipoAmbiente;
 import br.com.adelfo.nfse.nacional.service.dto.request.CancelamentoRequest;
 import br.com.adelfo.nfse.nacional.service.dto.request.ConsultaDFeRequest;
 import br.com.adelfo.nfse.nacional.service.dto.request.ConsultaDpsRequest;
@@ -17,6 +18,7 @@ import br.com.adelfo.nfse.nacional.service.dto.response.ConsultaEventosResponse;
 import br.com.adelfo.nfse.nacional.service.dto.response.ConsultaNfseResponse;
 import br.com.adelfo.nfse.nacional.service.dto.response.EmissaoResponse;
 import br.com.adelfo.nfse.nacional.service.dto.response.ManifestacaoResponse;
+import br.com.adelfo.nfse.nacional.service.dto.response.SituacaoNfse;
 
 /**
  * Fachada da API Sefin Nacional NFS-e.
@@ -77,6 +79,24 @@ public interface NfseService {
      * <p>Única operação da fachada servida pelo ADN, e não pela Sefin.
      */
     ConsultaEventosResponse consultarEventos(ConsultaEventosRequest request);
+
+    /**
+     * Situação da NFS-e: válida, cancelada, substituída, com cancelamento em análise ou
+     * inexistente.
+     *
+     * <p>Existe porque a pergunta "esta nota está cancelada?" não se responde pela consulta por
+     * chave: a NFS-e continua com {@code cStat 100} depois do cancelamento, que é um evento
+     * separado. Faz a mesma chamada ao ADN que {@link #consultarEventos}; use aquela quando
+     * precisar também dos XMLs.
+     *
+     * <p><b>O ADN recebe os documentos com atraso.</b> Em 27/10/2026 a nota e o evento de
+     * cancelamento chegaram ao ADN cerca de 30 segundos depois do processamento na Sefin. Logo
+     * após emitir ou cancelar, a resposta pode ser {@link SituacaoNfse#NAO_ENCONTRADA} ou
+     * {@link SituacaoNfse#VALIDA}; para confirmar a própria operação, use o retorno dela.
+     */
+    default SituacaoNfse consultarSituacao(TipoAmbiente ambiente, String chaveAcesso) {
+        return consultarEventos(new ConsultaEventosRequest(ambiente, chaveAcesso)).situacao();
+    }
 
     /**
      * Distribuição de DF-e a partir de um NSU

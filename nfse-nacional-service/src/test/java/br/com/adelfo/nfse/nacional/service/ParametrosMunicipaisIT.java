@@ -255,7 +255,8 @@ class ParametrosMunicipaisIT {
                     + " evento=" + d.tipoEvento() + " geracao=" + d.dataHoraGeracao()
                     + " xml=" + (d.xml() == null ? "null" : d.xml().length() + " bytes"));
         }
-        System.out.println("  cancelada: " + r.cancelada());
+        System.out.println("  situação : " + r.situacao());
+        System.out.println("  fachada  : " + nfse.consultarSituacao(ambiente, chave));
 
         assertFalse(r.documentos().isEmpty(), "a nota informada deveria existir");
         // A rota chama-se /Eventos mas devolve a NFS-e junto — é o que distingue documentos() de eventos().

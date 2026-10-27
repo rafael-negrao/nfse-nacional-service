@@ -348,6 +348,15 @@ distinguidos por `TipoDocumento`.
 em **PascalCase**, ao contrário da Sefin, e o `ArquivoXml` é GZip+Base64. `NfseServiceImpl` tem um
 único parser (`documentosDoLote`) para as duas, e ambas entregam `DocumentoDistribuido`.
 
+**A situação da nota sai daqui, não da consulta por chave.** A NFS-e não muda depois de emitida —
+o `cStat` continua `100 - NFS-e Gerada` após o cancelamento, e é isso que o portal mostra ao abrir a
+nota. `ConsultaEventosResponse.situacao()` deriva `SituacaoNfse` dos eventos: as quatro formas de
+cancelamento do ANEXO_II (`CANCELAMENTO`, `CANCELAMENTO_POR_SUBSTITUICAO`,
+`CANCELAMENTO_DEFERIDO_ANALISE_FISCAL`, `CANCELAMENTO_POR_OFICIO`, nomes do enum `TipoEvento` da
+Swagger do ADN) e a solicitação de análise fiscal pendente. `NfseService.consultarSituacao` é o
+atalho. O ADN recebe nota e evento **~30 s depois** do processamento na Sefin (27/10/2026: `dhProc`
+17:29:52, geração no ADN 17:30:24) — consultar a situação logo após a operação engana.
+
 Duas armadilhas confirmadas em produção:
 
 - a rota `/Eventos` **não devolve só eventos** — a NFS-e vem junto, distinguida por
@@ -679,7 +688,7 @@ Xerces falha de forma intermitente quando o módulo de schemas entra como jar.
 Java 21 e Maven 3.8+ (o Maven local já roda em 21 por padrão).
 
 ```bash
-mvn clean install              # build completo (165 testes), instala em ~/.m2
+mvn clean install              # build completo (173 testes), instala em ~/.m2
 TZ=UTC mvn clean install       # o servidor roda em UTC; rode assim antes de um deploy
 mvn clean install -DskipTests  # só empacota
 mvn clean compile              # regenera o JAXB do nfse-nacional-schemas

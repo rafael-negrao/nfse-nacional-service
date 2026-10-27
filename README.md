@@ -161,6 +161,13 @@ nfse.cancelar(CancelamentoRequest.de(
 | `manifestar` | `POST <sefin>/nfse/{chave}/eventos` — 6 manifestações |
 | `consultarEventos` | `GET <adn>/contribuintes/NFSe/{chave}/Eventos` |
 | `consultarDFe` | `GET <adn>/contribuintes/DFe/{NSU}` |
+| `consultarSituacao` | mesma rota de `consultarEventos`; devolve `SituacaoNfse` |
+
+**Para saber se uma nota está cancelada, use `consultarSituacao`, não `consultarPorChave`.** A NFS-e
+não muda depois de emitida: o `cStat` continua `100 - NFS-e Gerada` após o cancelamento, que é um
+evento separado. A situação considera as quatro formas de cancelamento (emitente, substituição,
+deferimento de análise fiscal e ofício). O ADN recebe os documentos cerca de 30 s depois da Sefin,
+então logo após a operação a resposta ainda pode ser `NAO_ENCONTRADA` ou `VALIDA`.
 
 ### `ParametrosMunicipaisService`
 
@@ -230,7 +237,7 @@ diagnóstico.
 ## Testes
 
 ```bash
-mvn clean install        # 165 testes, sem rede nem certificado
+mvn clean install        # 173 testes, sem rede nem certificado
 ```
 
 Os testes de integração terminam em `IT` e **não rodam no build** — batem em ambiente real e
