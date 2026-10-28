@@ -6,8 +6,9 @@ não conhece este repositório: tudo o que é preciso para emitir, consultar, ca
 NFS-e está aqui, inclusive as armadilhas já pagas contra o ambiente real.
 
 > **Para o assistente do projeto consumidor:** leia este arquivo inteiro antes de escrever código
-> que use a biblioteca. As seções 4 (conceitos), 7 (emissão), 14 (impressão), 15 (erros) e 16
-> (tabelas de domínio) evitam os enganos mais caros. Em caso de dúvida sobre uma regra fiscal, o `CLAUDE.md` deste repositório tem o histórico
+> que use a biblioteca. As seções 4 (conceitos), 7 (emissão), 9 (tributação), 15 (impressão),
+> 16 (erros) e 17 (tabelas de domínio) evitam os enganos mais caros. Em caso de dúvida sobre uma
+> regra fiscal, o `CLAUDE.md` deste repositório tem o histórico
 > de cada decisão; os XSDs e anexos oficiais estão em `doc/`.
 
 Estado em **27/10/2026**.
@@ -24,18 +25,19 @@ Estado em **27/10/2026**.
 6. [Uso sem Spring](#6-uso-sem-spring)
 7. [Emitir uma NFS-e](#7-emitir-uma-nfs-e)
 8. [Referência do `DpsBuilder`](#8-referência-do-dpsbuilder)
-9. [IBS/CBS, ajuste de base de cálculo e imóveis](#9-ibscbs-ajuste-de-base-de-cálculo-e-imóveis)
-10. [Consultar](#10-consultar)
-11. [Cancelar e substituir](#11-cancelar-e-substituir)
-12. [Manifestar](#12-manifestar)
-13. [Parâmetros municipais](#13-parâmetros-municipais)
-14. [Imprimir — DANFSe](#14-imprimir--danfse)
-15. [Erros](#15-erros)
-16. [Tabelas de domínio e utilitários](#16-tabelas-de-domínio-e-utilitários)
-17. [Emissão por decisão judicial (bypass)](#17-emissão-por-decisão-judicial-bypass)
-18. [Testando o projeto consumidor](#18-testando-o-projeto-consumidor)
-19. [Exemplo completo de serviço Spring](#19-exemplo-completo-de-serviço-spring)
-20. [Checklist e armadilhas](#20-checklist-e-armadilhas)
+9. [Tributação — como escolher os parâmetros](#9-tributação--como-escolher-os-parâmetros)
+10. [IBS/CBS, ajuste de base de cálculo e imóveis](#10-ibscbs-ajuste-de-base-de-cálculo-e-imóveis)
+11. [Consultar](#11-consultar)
+12. [Cancelar e substituir](#12-cancelar-e-substituir)
+13. [Manifestar](#13-manifestar)
+14. [Parâmetros municipais](#14-parâmetros-municipais)
+15. [Imprimir — DANFSe](#15-imprimir--danfse)
+16. [Erros](#16-erros)
+17. [Tabelas de domínio e utilitários](#17-tabelas-de-domínio-e-utilitários)
+18. [Emissão por decisão judicial (bypass)](#18-emissão-por-decisão-judicial-bypass)
+19. [Testando o projeto consumidor](#19-testando-o-projeto-consumidor)
+20. [Exemplo completo de serviço Spring](#20-exemplo-completo-de-serviço-spring)
+21. [Checklist e armadilhas](#21-checklist-e-armadilhas)
 
 ---
 
@@ -86,7 +88,18 @@ GroupId `br.com.adelfo.nfse.nacional`, versão `1.0.0`. Pacote-raiz idem.
    volta `E0084`/`E0120`. Hoje as notas dessas empresas são emitidas pelo sistema da Prefeitura e
    replicadas ao ADN, de onde a biblioteca as **consulta e imprime** normalmente.
 
-Para saber se o município já aceita, consulte o convênio (seção 13).
+**Optantes do Simples de São Paulo (Comaho, Adelfo) são obrigados a emitir pelo Emissor Nacional a
+partir de 01/11/2026** — Resolução CGSN nº 191/2026, confirmada pela Prefeitura em 19/10/2026. O
+sistema municipal fica só para consulta e para emissão retroativa de fatos geradores até
+31/10/2026. Em 28/10/2026 o convênio de SP em produção ainda respondia situação `0`.
+
+> **Lacuna de novembro de 2026.** De 01/11 a 30/11 a emissão é obrigatória pelo Emissor Nacional,
+> mas produção ainda valida o leiaute da NT 004 v2.0 — e a biblioteca só gera o da NT 009. A DPS do
+> perfil Comaho (seção 9), validada contra o pacote anterior em 28/10/2026, é recusada
+> (`finNFSe` na raiz e posição do `cNBS`): seria `E1235`. **Nesse mês, emita pelo Emissor Nacional
+> web** (ou adapte a biblioteca — decisão do usuário). A partir de 01/12/2026 a biblioteca vale.
+
+Para saber se o município já aceita, consulte o convênio (seção 14).
 
 ---
 
@@ -171,14 +184,18 @@ notas não têm validade jurídica. O ambiente do request precisa ser o mesmo do
 cancelamento é um **evento** separado. Para saber se uma nota está cancelada, use
 `consultarSituacao` — **nunca** o `cStat` da consulta por chave.
 
-**O ADN atrasa ~30 s.** Notas e eventos chegam ao ADN cerca de 30 segundos depois do
-processamento na Sefin. Logo após emitir ou cancelar, `consultarSituacao` pode responder
+**O ADN atrasa — em geral ~30 s, mas já passou de 15 minutos.** Notas e eventos chegam ao ADN
+depois do processamento na Sefin. Logo após emitir ou cancelar, `consultarSituacao` pode responder
 `NAO_ENCONTRADA` ou `VALIDA`. Para confirmar a operação que você acabou de fazer, use o retorno
-dela.
+dela; para conferir depois, `consultarEvento(ConsultaEventoRequest.cancelamento(...))` consulta a
+**Sefin**, que registra o evento na hora. Em 28/10/2026 (produção restrita) um cancelamento
+constava na Sefin às 09:08 e às 09:21 o ADN ainda só tinha a nota — no mesmo dia, outro
+cancelamento chegou em menos de 45 s. Não trate `VALIDA` recente como prova de que o cancelamento
+falhou.
 
 **Não existe consulta por período.** Nenhuma rota aceita intervalo de datas. Para descobrir notas
 sem conhecer a chave (por exemplo, notas recebidas de fornecedores), use a **distribuição por
-NSU** (`consultarDFe`), guardando o último NSU processado — seção 10.
+NSU** (`consultarDFe`), guardando o último NSU processado — seção 11.
 
 **Rate limit no ADN.** Distribuição, eventos e parametrização respondem **429** se chamados em
 sequência rápida. Espace as chamadas (6–8 s funciona) e trate `isLimiteDeRequisicoes()`.
@@ -419,7 +436,7 @@ chamada**, com o nome do método e o código da regra.
 | `versaoAplicativo(String)` | `verAplic` | padrão `adelfo-nfse-1.0.0`; máx. 20 caracteres |
 | `emitidaPeloPrestador()` | `tpEmit=1` | **o único aceito hoje** |
 | `emitidaPeloTomador(motivo)` / `emitidaPeloIntermediario(motivo)` | `tpEmit=2/3` | existem no leiaute; **a Sefin recusa com `E9996`** |
-| `substitui(chave, motivo, descricao)` | `subst` | ver seção 11 |
+| `substitui(chave, motivo, descricao)` | `subst` | ver seção 12 |
 | `id()` | — | Id da DPS (45 posições); disponível antes de `build()` |
 | `build()` | — | XML não assinado, validado |
 
@@ -481,7 +498,7 @@ Descubra o código e a descrição oficial com `ListaServicoNacional.buscar("010
 | `valorRecebidoIntermediario(v)` | |
 | `descontoIncondicionado(v)` / `descontoCondicionado(v)` | |
 | `deducaoPercentual(p)` / `deducaoValor(v)` | ajuste da BC do ISSQN (exclusivos entre si); `E1297` barra alíquota efetiva < 2% |
-| `documentoAjusteBC(DocumentoAjusteBC)` | documentos que justificam o ajuste; seção 9 |
+| `documentoAjusteBC(DocumentoAjusteBC)` | documentos que justificam o ajuste; seção 10 |
 | `issqnTributavel()` / `issqnImunidade(tipo)` / `issqnExportacao(paisIso)` / `issqnNaoIncidencia()` | `tribISSQN` 1–4; um deles |
 | `issqnNaoRetido()` / `issqnRetidoPeloTomador()` / `issqnRetidoPeloIntermediario()` | `tpRetISSQN` 1–3; um deles |
 | `aliquota(p)` | só quando o município de incidência não fornece; máx. 5% (`E1300`); **não informe para ME/EPP no SN sem retenção** (`E0625`) |
@@ -489,11 +506,202 @@ Descubra o código e a descrição oficial com `ListaServicoNacional.buscar("010
 | `pisCofins(cst, bc, aliqPis, aliqCofins, vPis, vCofins)` / `pisCofinsCst(cst)` / `retencaoPisCofins(tipo)` | |
 | `retencoesFederais(vRetCP, vRetIRRF, vRetCSLL)` | |
 | `semTotalTributos()` / `totalTributos(fed, est, mun)` / `totalTributosPercentual(fed, est, mun)` / `totalTributosSimplesNacional(p)` | Lei 12.741; **um deles é obrigatório** |
-| `ibsCbs(IbsCbsBuilder)` | grupo da Reforma Tributária; opcional; seção 9 |
+| `ibsCbs(IbsCbsBuilder)` | grupo da Reforma Tributária; opcional; seção 10 |
 
 ---
 
-## 9. IBS/CBS, ajuste de base de cálculo e imóveis
+## 9. Tributação — como escolher os parâmetros
+
+A seção 8 diz **o que** cada método preenche; esta diz **qual** chamar. Os parâmetros tributários
+parecem muitos porque o leiaute põe lado a lado coisas de naturezas diferentes: umas se decidem uma
+vez por empresa, outras a cada nota, e algumas nem são do emitente.
+
+> **Para o assistente:** parâmetro tributário é decisão do contador, não do programador. Codifique
+> o perfil que o usuário (ou o histórico de notas) der; diante de um caso que o perfil não cobre —
+> retenção, tomador órgão público, serviço novo, exportação — **pare e pergunte**. Não deduza
+> alíquota ou retenção da legislação por conta própria.
+
+### As seis perguntas
+
+| # | Pergunta | Métodos | Quem decide | Muda a cada nota? |
+|---|---|---|---|---|
+| 1 | Qual o regime da empresa? | `optanteSimplesNacional…`/`naoOptanteSimplesNacional`, `semRegimeEspecial`/`regimeEspecial` | contador | não |
+| 2 | O ISSQN incide? | `issqnTributavel` / `issqnImunidade` / `issqnExportacao` / `issqnNaoIncidencia` | o serviço; quase sempre tributável | raramente |
+| 3 | **Quem recolhe** o ISSQN? | `issqnNaoRetido` / `issqnRetidoPeloTomador` / `issqnRetidoPeloIntermediario` | lei municipal + tomador | **sim** |
+| 4 | Qual a alíquota? | `aliquota(p)` | **o município** — em geral não se informa | não |
+| 5 | Há tributo federal destacado ou retido? | `pisCofins`, `retencaoPisCofins`, `retencoesFederais` | regime do prestador + do tomador | **sim** |
+| 6 | Qual a carga aproximada (Lei 12.741)? | `totalTributos…` / `semTotalTributos` | informativo; **não altera valor algum** | percentual fixo |
+
+E o IBS/CBS (seção 10), que na DPS é só declaratório: a plataforma calcula os valores.
+
+### Destacar × reter — a distinção que destrava o resto
+
+- **Destacar** é informar na nota quanto de tributo existe. Ninguém paga nada a mais nem a menos.
+- **Reter** é o tomador descontar o tributo do pagamento e recolhê-lo ele mesmo. O prestador recebe
+  menos.
+
+**Só o que é retido sai do valor líquido** (`vLiq = vServ − descontos − retenções`).
+
+Exemplo com números fictícios, modelado numa nota real de prestador do Lucro Real:
+
+```
+vServ            1.000,00
+ISSQN   2,00%       20,00   tpRetISSQN=1 → não retido; o prestador recolhe
+PIS     1,65%       16,50   ┐ CST 01, tpRetPisCofins=2 → não retidos;
+COFINS  7,60%       76,00   ┘ só destacados
+IRRF    1,50%       15,00   ← RETIDO: o tomador descontou
+──────────────────────────
+vTotalRet           15,00
+vLiq               985,00   = 1.000,00 − 15,00
+```
+
+```java
+.naoOptanteSimplesNacional().semRegimeEspecial()
+.valorServico(new BigDecimal("1000.00"))
+.issqnTributavel().issqnNaoRetido()                    // alíquota: o município fornece
+.pisCofins("01", new BigDecimal("1000.00"), new BigDecimal("1.65"), new BigDecimal("7.60"),
+           new BigDecimal("16.50"), new BigDecimal("76.00"))
+.retencaoPisCofins("2")                                // 2 = PIS/COFINS não retidos
+.retencoesFederais(null, new BigDecimal("15.00"), null) // CP, IRRF, CSLL — null = não informa
+.totalTributos(new BigDecimal("107.50"), BigDecimal.ZERO, new BigDecimal("20.00"));
+```
+
+Na nota real, a plataforma ainda calculou a base do IBS/CBS como `vServ − ISSQN − PIS − COFINS`:
+o emitente não manda nada disso.
+
+`tpRetPisCofins`: `0` PIS/COFINS/CSLL não retidos · `1` PIS/COFINS retidos · `2` PIS/COFINS não
+retidos · `3` PIS/COFINS/CSLL retidos · `4`–`9` combinações (ver `TSTipoRetPISCofins` no XSD).
+
+### Optante do Simples (ME/EPP) — o caso mais simples
+
+Com `optanteSimplesNacionalMeEpp("1")` o ISSQN e os federais são pagos na guia única (DAS). Por
+isso a nota **não destaca nada**:
+
+- `issqnTributavel()` + `issqnNaoRetido()`, **sem** `aliquota(...)` — informá-la, mesmo `0.00`, é
+  `E0625`;
+- **sem** `pisCofins` e sem `retencoesFederais` — o optante é dispensado da retenção de IRRF
+  (IN RFB 765/2007, art. 1º) e não destaca PIS/COFINS;
+- `totalTributos(0, 0, 0)` é o que o histórico real usa (ver o perfil abaixo).
+
+Exceções que existem e que o perfil precisa declarar explicitamente: **retenção de ISSQN** exigida
+por alguns tomadores (órgão público, por lei municipal) e **retenção de INSS** (`vRetCP`) em cessão
+de mão de obra — esta apareceu em notas reais de prestadores do Simples.
+
+### Perfil de emitente: Comaho
+
+Levantado em 28/10/2026 a partir de **todas as 341 NFS-e que a Comaho emitiu** de janeiro a
+outubro de 2026, lidas pela distribuição do ADN em produção. Foram geradas pelo sistema da
+Prefeitura de São Paulo; a emissão por esta biblioteca deve reproduzir a mesma tributação.
+
+**Todas as 341 têm exatamente a mesma configuração tributária:**
+
+| Campo | Valor | Método |
+|---|---|---|
+| `opSimpNac` / `regApTribSN` / `regEspTrib` | `3` / `1` / `0` | `optanteSimplesNacionalMeEpp("1")`, `semRegimeEspecial()` |
+| `cTribNac` | `140101` — manutenção e conservação de máquinas, aparelhos e equipamentos | `servico("140101", descricao)` |
+| `cTribMun` | `009` | `codigoTributacaoMunicipal("009")` |
+| `cNBS` | `999999999` (genérico) | `codigoNbs(...)` — ver decisão abaixo |
+| `cLocPrestacao` / `cLocIncid` | `3550308` (São Paulo), **mesmo com tomador em outra cidade** | `servicoPrestadoNoMunicipio("3550308")` |
+| `tribISSQN` / `tpRetISSQN` | `1` / `1` — tributável, não retido | `issqnTributavel()`, `issqnNaoRetido()` |
+| `pAliq` | `0.00` no histórico | **omitir** (`E0625`) |
+| Grupo federal | ausente | — |
+| `totTrib` | `0.00` / `0.00` / `0.00` | `totalTributos(ZERO, ZERO, ZERO)` |
+| IBS/CBS | ausente | não chamar `ibsCbs(...)` |
+| Descontos, deduções, intermediário | nunca | — |
+| `cIntContrib` | 13 dígitos (número interno) | `codigoInterno(...)` |
+| Série | `1` | `identificacao("1", …)` |
+
+No resultado, `vBC = vServ`, `vISSQN = 0.00` e `vLiq = vServ` em todas — nada sai do líquido.
+
+**O que o sistema da Prefeitura mandava e esta biblioteca não manda:** a inscrição municipal do
+prestador (`E0120` enquanto o CNC de SP não tiver os dados complementares), nome e endereço do
+prestador (`E0121`/`E0128` — vêm do cadastro) e `pAliq 0.00` (`E0625`). A NFS-e resultante traz os
+mesmos dados do prestador, preenchidos pela plataforma.
+
+**Tomador:** CNPJ em ~80% das notas, CPF no resto; endereço sempre informado; e-mail quase sempre;
+inscrição municipal do tomador às vezes (`tomadorInscricaoMunicipal`).
+
+**Competência:** igual à data de emissão em 96% das notas; nas demais, anterior (mesmo mês ou o
+mês anterior). Nunca posterior (`E0015`).
+
+**A descrição termina com dois textos fixos, presentes nas 341.** A forma de 322 delas, literal:
+
+```
+VALOR APROXIMADO DOS TRIBUTOS (17.35%): R$ 107.57 FONTE: IBPT EMPRESA OPTANTE PELO SIMPLES NACIONAL, DISPENSADA DA RETENCAO DO IRRF, CONFORME ARTIGO 1.DA IN RB 745 2007
+```
+
+- O percentual foi **17,35% em todos os meses**; o valor é `vServ × 17,35%`, com ponto decimal.
+  Era digitado à mão e diverge da conta em ~7% das notas — gere-o no código.
+- **A citação está errada no histórico:** a dispensa de retenção de IRRF para optante do Simples é
+  a **IN RFB 765/2007**, art. 1º; "IN RB 745 2007" é erro de digitação que se repetiu. Uma das 341
+  já traz a forma correta. O exemplo abaixo usa a correta — confirme com o usuário antes de
+  reproduzir o texto antigo. Os modelos de abertura mais comuns: `MANUTENÇÃO EM EQUIPAMENTO …`
+(85%) e `CALIBRAÇÃO EM EQUIPAMENTO …` (13%), seguidos de OS, pedido, contrato/parcela e vencimento.
+
+```java
+static final BigDecimal PERCENTUAL_IBPT = new BigDecimal("17.35");   // confirmar a vigência com o contador
+
+static String descricaoComaho(String servico, BigDecimal valor) {
+    BigDecimal tributos = valor.multiply(PERCENTUAL_IBPT).movePointLeft(2).setScale(2, RoundingMode.HALF_UP);
+    return servico
+            + "\nVALOR APROXIMADO DOS TRIBUTOS (" + PERCENTUAL_IBPT + "%): R$ " + tributos + " FONTE: IBPT"
+            + "\nEMPRESA OPTANTE PELO SIMPLES NACIONAL, DISPENSADA DA RETENÇÃO DO IRRF,"
+            + " CONFORME ART. 1º DA IN RFB 765/2007";
+}
+
+DpsBuilder dps = DpsBuilder.novo()
+        .ambiente(ambiente)
+        .municipioEmissor("3550308")
+        .identificacao("1", proximoNumero, LocalDate.now())   // competência = data de emissão
+        .emitidaPeloPrestador()
+        .prestadorCnpj(certificado.inscricaoFederal())
+        .prestadorContato(null, emailFiscal)
+        .optanteSimplesNacionalMeEpp("1")
+        .semRegimeEspecial()
+        .tomadorCnpj(cnpj, razaoSocial)                       // ou tomadorCpf(cpf, nome)
+        .tomadorEndereco(enderecoDoTomador)
+        .tomadorContato(null, emailDoTomador)
+        .servicoPrestadoNoMunicipio("3550308")                // SP mesmo com tomador de fora
+        .servico("140101", descricaoComaho("MANUTENÇÃO EM EQUIPAMENTO …", valor))
+        .codigoTributacaoMunicipal("009")
+        .codigoNbs("999999999")                               // ou "120018200" — ver abaixo
+        .codigoInterno(numeroInterno)
+        .valorServico(valor)
+        .issqnTributavel()
+        .issqnNaoRetido()
+        .totalTributos(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+```
+
+**Validada em produção restrita em 28/10/2026** com o certificado da Comaho: emitida na primeira
+tentativa (nNFSe 1, chave `…0126101339161070`, R$ 1,00), cancelada e conferida como `CANCELADA` no
+ADN. O que a nota mostrou:
+
+- `cTribMun 009` é reconhecido por São Paulo — a NFS-e traz o `xTribMun` "Conserto, restauração,
+  manutenção e conservação de máquinas, aparelhos, equipamentos…";
+- tomador **pessoa física só com CPF e nome, sem endereço**, é aceito;
+- o `emit` vem do cadastro com nome e endereço, **sem a IM** que o sistema da Prefeitura punha;
+- `xNBS` vem vazio com o código genérico `999999999`;
+- nos valores da NFS-e o optante recebe só `vLiq` — sem `vBC`, `pAliqAplic` e `vISSQN`, que o
+  sistema da Prefeitura preenchia com zeros. O DANFSe mostra "-" nesses campos.
+
+**Decisões em aberto, para o usuário/contador:**
+
+1. **NBS.** O histórico usa `999999999`, o código genérico — aceito pela Sefin em produção restrita.
+   O código específico é `120018200`, *"Serviços de manutenção e reparação de instrumentos e
+   equipamentos médico-hospitalares, odontológicos, óticos e de precisão"*. A NBS tende a pesar
+   na classificação do IBS/CBS; escolha com o contador.
+2. **Percentual IBPT.** 17,35% fixo o ano todo; a tabela do IBPT é revisada periodicamente.
+3. **`totTrib` zerado com o percentual na descrição** reproduz o histórico. O leiaute tem campo
+   próprio para o optante (`totalTributosSimplesNacional(p)`), que leva o percentual da alíquota do
+   Simples — não o do IBPT. Trocar é decisão do contador.
+4. **Valor zero.** Uma das 341 notas saiu com `vServ 0.00`; não repita — emita com o valor real.
+
+Fora do perfil (nunca visto no histórico — **pergunte antes de implementar**): retenção de ISSQN,
+qualquer retenção federal, desconto, dedução, intermediário, tomador no exterior, outro `cTribNac`.
+
+---
+
+## 10. IBS/CBS, ajuste de base de cálculo e imóveis
 
 ### Grupo IBS/CBS (`IbsCbsBuilder`)
 
@@ -549,7 +757,7 @@ IBS/CBS). `descricaoTipo` só nos tipos `99`/`199`. Documento identificado por `
 
 ---
 
-## 10. Consultar
+## 11. Consultar
 
 Todas as consultas **devolvem objetos**; quem lança são as operações de escrita. A exceção é
 `consultarPorChave`, que lança `NfseException` com código `E2401` quando a chave não existe.
@@ -644,7 +852,7 @@ do {
 
 ---
 
-## 11. Cancelar e substituir
+## 12. Cancelar e substituir
 
 ### Cancelar
 
@@ -681,7 +889,7 @@ imunidade/isenção, `04` exclusão retroativa, `05` rejeição pelo tomador/int
 
 ---
 
-## 12. Manifestar
+## 13. Manifestar
 
 Confirmação ou rejeição da nota pelo prestador, tomador ou intermediário. **Implementado e
 validado contra o XSD, mas ainda sem uma manifestação aceita pela Sefin** — trate como
@@ -700,7 +908,7 @@ Uma manifestação por autor e por nota (`E1833`).
 
 ---
 
-## 13. Parâmetros municipais
+## 14. Parâmetros municipais
 
 `ParametrosMunicipaisService` (bean próprio; outra API, no ADN).
 
@@ -734,7 +942,7 @@ Retornam `ParametroMunicipalResponse(encontrado, mensagem, conteudo)` com o JSON
 
 ---
 
-## 14. Imprimir — DANFSe
+## 15. Imprimir — DANFSe
 
 O **DANFSe** (Documento Auxiliar da NFS-e) é o PDF que se entrega ao cliente. A API nacional que o
 gerava foi **suspensa em 03/08/2026** pela NT 008/2026, e gerar o PDF passou a ser obrigação do
@@ -903,7 +1111,7 @@ documento fiscal, o PDF é auxiliar.
 
 ---
 
-## 15. Erros
+## 16. Erros
 
 ### Tipos
 
@@ -953,7 +1161,7 @@ As regras completas estão nos anexos (`doc/anexos/ANEXO_I-*.xlsx`, aba `RN DPS_
 
 ---
 
-## 16. Tabelas de domínio e utilitários
+## 17. Tabelas de domínio e utilitários
 
 ### `Documentos` — normalização e dígito verificador
 
@@ -1142,7 +1350,7 @@ amanhã em Brasília, e a competência sairia no futuro (`E0015`).
 
 ---
 
-## 17. Emissão por decisão judicial (bypass)
+## 18. Emissão por decisão judicial (bypass)
 
 Só quando o município cadastrou uma decisão administrativa/judicial e autorizou o contribuinte.
 Envia-se a **NFS-e inteira** — a responsabilidade pelo conteúdo é do contribuinte.
@@ -1166,7 +1374,7 @@ Nunca exercitado contra a Sefin.
 
 ---
 
-## 18. Testando o projeto consumidor
+## 19. Testando o projeto consumidor
 
 - **Testes unitários:** mocke `NfseService` (é interface). Use `DpsBuilder` de verdade — ele é
   puro, sem rede, e pegar erro de leiaute no teste é o ponto. `DanfseService` também roda sem
@@ -1178,7 +1386,7 @@ Nunca exercitado contra a Sefin.
 
 ---
 
-## 19. Exemplo completo de serviço Spring
+## 20. Exemplo completo de serviço Spring
 
 ```java
 @Service
@@ -1242,7 +1450,7 @@ Para o reprocessamento: `consultarPorIdDps(new ConsultaDpsRequest(ambiente, nota
 
 ---
 
-## 20. Checklist e armadilhas
+## 21. Checklist e armadilhas
 
 Antes de emitir:
 
@@ -1254,6 +1462,7 @@ Antes de emitir:
 - [ ] `cTribNac` de 6 dígitos válido; `cTribMun` de **3**; NBS de 9;
 - [ ] alíquota só quando cabe (nunca para ME/EPP no SN sem retenção);
 - [ ] um dos `semTotalTributos`/`totalTributos*`;
+- [ ] tributação conforme o perfil do emitente (seção 9) — caso fora do perfil, perguntar antes;
 - [ ] competência ≤ hoje em Brasília (`DataHoraFiscal.hoje()`);
 - [ ] município aceita emissão (`consultarConvenio`) — São Paulo em produção ainda não.
 
@@ -1261,7 +1470,7 @@ Depois de emitir:
 
 - [ ] guardar `chaveAcesso` e `xmlNfse`;
 - [ ] situação por `consultarSituacao`, nunca pelo `cStat`;
-- [ ] esperar ~30 s antes de confiar no ADN;
+- [ ] não confiar no ADN logo após a operação (em geral ~30 s; já passou de 15 min) — confirme pela Sefin;
 - [ ] PDF com `comSituacao(...)`.
 
 Armadilhas que já custaram tempo:
@@ -1285,5 +1494,6 @@ Armadilhas que já custaram tempo:
 | Data | O quê |
 |---|---|
 | ~30/10/2026 | próximo release da NT 009 em produção restrita (move `indDest`/`dest`) |
+| **01/11/2026** | optantes do Simples de São Paulo passam a emitir obrigatoriamente pelo Emissor Nacional (Resolução CGSN 191/2026) — mas produção ainda no leiaute antigo; ver seção 2 |
 | **01/12/2026** | produção passa a exigir o leiaute da NT 009 — a partir daí a biblioteca emite em produção (se o município aceitar) |
-| 01/01/2027 | migração dos optantes do Simples de São Paulo para o Emissor Nacional, segundo a Prefeitura (a Resolução CGSN 189/2026 dizia 01/09/2026, sem efeito até agora) |
+

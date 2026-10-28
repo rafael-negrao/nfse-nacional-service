@@ -24,6 +24,11 @@ emitiu, consultou por chave, cancelou e consultou o evento de cancelamento — 4
 certificado da Adelfo em São Paulo. Duas notas de R$ 1,00 foram emitidas e canceladas
 (`…0126105597989607` e `…0226100127014831`). **Manifestação segue sem resposta da Sefin.**
 
+**Em 28/10/2026 a Comaho repetiu o ciclo** com o perfil tributário das notas que ela emite hoje pelo
+sistema da Prefeitura (Simples, `cTribNac 140101`, `cTribMun 009`, tomador pessoa física sem
+endereço): emitida na primeira tentativa (`…0126101339161070`), cancelada e lida como `CANCELADA`
+no ADN. O perfil está em `GUIA-DE-USO.md`, seção 9.
+
 Três coisas tiveram de mudar para chegar lá, nesta ordem — cada uma só apareceu depois que a
 anterior foi resolvida:
 
@@ -68,11 +73,18 @@ ela que povoa o CNC:
 | Data | Grupo | Fonte |
 |---|---|---|
 | 03/08/2026 | profissionais liberais e autônomos | Prefeitura de SP |
-| 01/09/2026 | optantes do Simples Nacional | Resolução CGSN nº 189/2026 (federal) |
-| 01/01/2027 | optantes do Simples Nacional | Prefeitura de SP |
+| ~~01/09/2026~~ | optantes do Simples Nacional | Resolução CGSN nº 189/2026 — adiada |
+| **01/11/2026** | optantes do Simples Nacional | Resolução CGSN nº 191/2026, confirmada pela Prefeitura em 19/10/2026 |
 
-**As duas últimas linhas se contradizem** — a norma federal marca setembro/2026 e a página da
-Prefeitura marca janeiro/2027. Confirme antes de planejar em cima de qualquer uma.
+**Resolvido em 28/10/2026:** a data dos optantes do Simples é **01/11/2026** (a de 01/01/2027, que
+constava antes desta tabela, ficou superada). A Prefeitura mantém o sistema próprio só para
+consulta e emissão retroativa de fatos geradores até 31/10/2026. Comaho e Adelfo, ambas do
+Simples, passam a emitir pelo Emissor Nacional em novembro.
+
+**Mas produção só aceita o leiaute da NT 009 em 01/12/2026**, e a biblioteca só gera esse. Em
+28/10/2026 a DPS do perfil Comaho foi validada contra o pacote anterior (`Schemas/1.01`) e
+recusada — `finNFSe` na raiz da `infDPS` e `cNBS` antes de `xDescServ`. De 01/11 a 30/11 a
+biblioteca não emite em produção.
 
 A Adelfo é **optante do Simples** (`opSimpNac=3` na nota de referência), então cai justamente na
 faixa em disputa: hoje não está no CNC de São Paulo, e é isso que o `E0084` e o `E0120` relatam.
@@ -137,8 +149,8 @@ um CNPJ estabelecido onde o Emissor Nacional já opera.
 
 Por isso **a validação das rotas de escrita ficou bloqueada até São Paulo migrar**. Em produção
 restrita a situação virou `1` entre 09/08 e 27/10/2026, e a emissão passou; em produção, em
-27/10/2026, ainda era `0`. A data de 01/09/2026 (Resolução CGSN nº 189/2026) já passou sem efeito
-em produção; resta a de 01/01/2027 (página da Prefeitura).
+27 e 28/10/2026, ainda era `0`. A data oficial para o Simples é 01/11/2026 (Resolução CGSN nº
+191/2026); para emitir pela biblioteca, produção ainda precisa do leiaute da NT 009 (01/12/2026).
 
 Em vez de apostar numa das datas, `ParametrosMunicipaisIT.saoPauloJaMigrouParaOEmissorNacional`
 pergunta ao ambiente e imprime `LIBERADO` ou `AINDA NÃO`. Rode-o periodicamente — com
@@ -363,7 +375,11 @@ cancelamento do ANEXO_II (`CANCELAMENTO`, `CANCELAMENTO_POR_SUBSTITUICAO`,
 `CANCELAMENTO_DEFERIDO_ANALISE_FISCAL`, `CANCELAMENTO_POR_OFICIO`, nomes do enum `TipoEvento` da
 Swagger do ADN) e a solicitação de análise fiscal pendente. `NfseService.consultarSituacao` é o
 atalho. O ADN recebe nota e evento **~30 s depois** do processamento na Sefin (27/10/2026: `dhProc`
-17:29:52, geração no ADN 17:30:24) — consultar a situação logo após a operação engana.
+17:29:52, geração no ADN 17:30:24) — consultar a situação logo após a operação engana. **E nem
+sempre são 30 s:** em 28/10/2026 o cancelamento da nota de teste `…0226108642141870` (item 99,
+não incidência) constava na Sefin às 09:08:04 e ainda não tinha chegado ao ADN às 09:21, enquanto o
+da `…0126101339161070`, do mesmo dia, chegou em menos de 45 s. A Sefin (`consultarEvento`) é a
+confirmação imediata; o ADN é eventual.
 
 Duas armadilhas confirmadas em produção:
 
