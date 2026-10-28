@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>br.com.adelfo.nfse.nacional</groupId>
+        <artifactId>nfse-nacional</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>nfse-nacional-danfse</artifactId>
+    <packaging>jar</packaging>
+    <description>
+        Geração local do DANFSe (Documento Auxiliar da NFS-e) em PDF, conforme a NT 008/2026 v1.02.
+        Módulo opcional — a API nacional de geração foi suspensa em 03/08/2026, e o DANFSe passou a
+        ser responsabilidade do sistema emissor.
+    </description>
+
+    <properties>
+        <openpdf.version>1.3.43</openpdf.version>
+        <zxing.version>3.5.3</zxing.version>
+    </properties>
+
+    <dependencies>
+        <!-- Tabelas de domínio (municípios, serviços) e SituacaoNfse, para a marca d'água. -->
+        <dependency>
+            <groupId>br.com.adelfo.nfse.nacional</groupId>
+            <artifactId>nfse-nacional-service</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- O DANFSe é especificado como tabela de coordenadas; o OpenPDF desenha nelas
+             diretamente. É o mesmo motor que o JasperReports usa para exportar PDF. -->
+        <dependency>
+            <groupId>com.github.librepdf</groupId>
+            <artifactId>openpdf</artifactId>
+            <version>${openpdf.version}</version>
+        </dependency>
+        <!-- QR Code de consulta pública (item 2.4.3 da NT). -->
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>core</artifactId>
+            <version>${zxing.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

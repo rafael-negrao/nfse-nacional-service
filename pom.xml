@@ -26,6 +26,7 @@
         <module>nfse-nacional-schemas</module>
         <module>nfse-nacional-client</module>
         <module>nfse-nacional-service</module>
+        <module>nfse-nacional-danfse</module>
     </modules>
 
     <properties>

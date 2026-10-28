@@ -17,7 +17,7 @@ outra configuração é obrigatória.
 | Cancelamento | **validado em produção restrita**, inclusive a consulta do evento |
 | Manifestação | implementada e validada contra os XSDs oficiais, **ainda sem resposta da Sefin** |
 | Leiaute | **NT 009/2026** (pacote de 20/10/2026), que produção restrita já exige e produção passa a exigir em 01/12/2026 |
-| DANFSE | não implementado — o serviço está fora do ar e sem documentação publicada |
+| DANFSE | **gerado localmente** pelo módulo opcional `nfse-nacional-danfse`, conforme a NT 008/2026 — a API nacional foi suspensa |
 
 O ciclo de escrita — emitir, consultar, cancelar e consultar o evento — está validado de ponta a
 ponta contra a Sefin de produção restrita. Em produção falta um passo administrativo: o
@@ -45,15 +45,26 @@ cd nfse-nacional-service
 mvn clean install -DskipTests
 ```
 
-Três artefatos são instalados em `~/.m2`, todos sob o groupId `br.com.adelfo.nfse.nacional`:
-`nfse-nacional-schemas`, `nfse-nacional-client` e `nfse-nacional-service`.
+Quatro artefatos são instalados em `~/.m2`, todos sob o groupId `br.com.adelfo.nfse.nacional`:
+`nfse-nacional-schemas`, `nfse-nacional-client`, `nfse-nacional-service` e
+`nfse-nacional-danfse`.
 
-Declare apenas o último — os outros vêm por transitividade:
+Declare o `nfse-nacional-service` — schemas e client vêm por transitividade:
 
 ```xml
 <dependency>
     <groupId>br.com.adelfo.nfse.nacional</groupId>
     <artifactId>nfse-nacional-service</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
+E o `nfse-nacional-danfse` só se for gerar o PDF da nota (traz OpenPDF e ZXing):
+
+```xml
+<dependency>
+    <groupId>br.com.adelfo.nfse.nacional</groupId>
+    <artifactId>nfse-nacional-danfse</artifactId>
     <version>1.0.0</version>
 </dependency>
 ```
@@ -143,6 +154,24 @@ do {
 nfse.cancelar(CancelamentoRequest.de(
         ambiente, chaveAcesso, "1", "Erro na emissão da nota fiscal"));
 ```
+
+### 4. Imprimir (DANFSe)
+
+A API nacional de DANFSE foi suspensa em 03/08/2026 (NT 008/2026); o PDF é gerado localmente, a
+partir do XML da nota, sem rede nem certificado:
+
+```java
+DanfseService danfse = new DanfseService();            // thread-safe, crie uma vez
+
+String xml = nfse.consultarPorChave(new ConsultaNfseRequest(ambiente, chave)).xmlNfse();
+SituacaoNfse situacao = nfse.consultarSituacao(ambiente, chave);   // para a marca d'água
+
+byte[] pdf = danfse.gerarPdf(DanfseRequest.de(xml).comSituacao(situacao));
+```
+
+A situação vai à parte porque a nota continua com `cStat 100` depois de cancelada; sem ela, o
+DANFSe de uma nota cancelada sairia sem a marca "CANCELADA" que a NT exige. Notas de produção
+restrita saem com "NFS-e SEM VALIDADE JURÍDICA" no cabeçalho.
 
 ---
 
@@ -237,7 +266,7 @@ diagnóstico.
 ## Testes
 
 ```bash
-mvn clean install        # 173 testes, sem rede nem certificado
+mvn clean install        # 197 testes, sem rede nem certificado
 ```
 
 Os testes de integração terminam em `IT` e **não rodam no build** — batem em ambiente real e
@@ -308,6 +337,8 @@ ambiente real — leitura recomendada antes de mexer no leiaute ou na assinatura
   segue a regra da NF-e por analogia e não foi conferido contra uma chave real;
 - as três rotas de alíquota do ADN respondem 400 para qualquer código de serviço, inclusive códigos
   reais — defeito do lado deles, reproduzido nos dois ambientes;
-- o DANFSE responde 503 em produção e 404 em produção restrita;
+- o DANFSe usa Helvetica no lugar de Arial e Microsoft Sans Serif, que são proprietárias (mesmas
+  métricas da Arial). Ainda não há leiaute para os novos fatos geradores do IBS/CBS — a NT 008
+  promete nota técnica própria para eles;
 - eventos de município e o subgrupo IBS/CBS no nível da NFS-e não são implementados: o primeiro não
   cabe ao contribuinte, o segundo exige integração com a Calculadora oficial.

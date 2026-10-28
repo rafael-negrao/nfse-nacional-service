@@ -156,8 +156,8 @@ Uma NFS-e real de produção já foi consultada e confirma decisões de implemen
 Receita usa `rsa-sha1` + C14N + enveloped, o `<Signature>` sai **sem prefixo** e o namespace da
 NFS-e é o **default** — exatamente o que `XmlSigningService` e `MarshallerNfse` produzem.
 
-Falta: os eventos de município (que o contribuinte não emite), o módulo DANFSE, a manifestação
-contra a Sefin, e a emissão em produção (CNC de São Paulo).
+Falta: os eventos de município (que o contribuinte não emite), a manifestação contra a Sefin, e a
+emissão em produção (CNC de São Paulo).
 
 ## Projeto de referência
 
@@ -174,8 +174,9 @@ cliente `java.net.http.HttpClient` escrito à mão.
 nfse-nacional (parent, packaging=pom, artifactId ≠ diretório)
 ├── nfse-nacional-schemas   ← JAXB gerado por xjc dos XSDs oficiais v1.01
 ├── nfse-nacional-client    ← CertificadoDigital, TipoAmbiente, NfseHttpClient (mTLS), GZipBase64
-└── nfse-nacional-service   ← NfseService + autoconfiguration; único módulo que o consumidor declara
-                              DpsBuilder e EventoBuilder montam o XML; NfseServiceImpl só transporta
+├── nfse-nacional-service   ← NfseService + autoconfiguration; único módulo que o consumidor declara
+│                             DpsBuilder e EventoBuilder montam o XML; NfseServiceImpl só transporta
+└── nfse-nacional-danfse    ← opcional: DanfseService gera o PDF da nota (NT 008), sem rede
 ```
 
 GroupId: `br.com.adelfo.nfse.nacional`. Pacote-raiz idem. O artefato pai chama-se `nfse-nacional`
@@ -373,24 +374,49 @@ já podem render **429**. O 429 chega como página HTML, não como JSON da API �
 `isLimiteDeRequisicoes()` e `isServicoIndisponivel()` para o chamador distinguir isso de rejeição
 fiscal e reprocessar.
 
-### DANFSE
+### DANFSE — gerado localmente (`nfse-nacional-danfse`)
 
-Existe API oficial para o PDF da nota, no ADN sob `/danfse` — a Sefin tinha `GET /DANFSe` e hoje
-responde 501 dizendo que o serviço foi movido. **Não há documentação dela em lugar nenhum**: não
-aparece na página "documentação atual" do gov.br, não é citada no guia das APIs do ADN, e a Swagger
-dela é a única das seis que não responde. **Também não foi possível exercitá-la** (ver `DanfseIT`):
+**A API nacional de DANFSE foi suspensa em 03/08/2026** pela **NT 008/2026** (SE/CGNFS-e,
+v1.02 de 14/07/2026, em `doc/nt-008-se-cgnfse-danfse-v1.02-20260714.pdf`).
+Gerar o PDF passou a ser obrigação do sistema emissor. Em 27/10/2026 o ADN ainda respondia 404 em
+`/danfse/*` (ver `DanfseIT`), e o Emissor Nacional web continua imprimindo pela própria tela.
 
-- produção: `503 — No server is available to handle this request`, gateway sem backend;
-- produção restrita: 404 em todos os caminhos tentados, inclusive `/danfse/{chave}`;
-- a Swagger dele não responde em caminho nenhum, enquanto as outras cinco respondem — por isso a
-  rota real continua desconhecida e nada foi implementado.
+`DanfseService.gerarPdf(DanfseRequest)` recebe o XML da NFS-e (de `emitir` ou `consultarPorChave`)
+e devolve uma página A4. Não usa rede nem certificado. Decisões que valem saber:
 
-O ADN também aplica rate limit nesse caminho: chamadas seguidas passam a devolver 429. Espace as
-tentativas, ou o diagnóstico vira ruído.
+- **OpenPDF, não JasperReports** — diverge do `nfe-danfe`. A NT especifica o DANFSe como tabela de
+  coordenadas em cm (item 2.4.5) e um modelo (Anexo I); `DesenhoDanfse` desenha nessas
+  coordenadas. Em Jasper seriam ~120 elementos posicionados num `.jrxml` escrito à mão — o do
+  `nfe-danfe` veio pronto do Java_NFe, este não existe. O OpenPDF é o motor que o Jasper usa por
+  baixo para PDF.
+- **XML lido por nome local, não por JAXB** (`XmlNfse`): o DANFSe imprime notas de qualquer versão
+  do leiaute. A nota de referência 236 (produção, leiaute antigo) e as da NT 009 saem pelo mesmo
+  código; `finNFSe`, `CST`/`cClassTrib` e os nomes de ajuste de BC são lidos nos dois lugares.
+- **Prestador vem do `infNFSe/emit` quando a DPS não o traz.** A NT aponta só `DPS/prest`, mas com
+  `tpEmit = 1` nome e endereço do prestador são proibidos na DPS (`E0121`, `E0128`); seguir a NT ao
+  pé da letra deixaria o bloco em branco em toda nota emitida pelo prestador.
+- **O CEP do `emit` vem sem o zero à esquerda** (`4273200`) — `Formatos.cep` completa.
+- **A situação vem de fora** (`DanfseRequest.comSituacao`): a nota fica com `cStat 100` depois de
+  cancelada, então a marca d'água "CANCELADA"/"SUBSTITUÍDA" (item 2.5) depende de
+  `NfseService.consultarSituacao`.
+- **Fontes**: a NT pede Arial e Microsoft Sans Serif, proprietárias; usa-se Helvetica (base 14 do
+  PDF, mesmas métricas da Arial, sem embutir). O poppler (`pdftoppm`) a renderiza sem negrito — o
+  PDF referencia `Helvetica-Bold` e o Preview/Acrobat mostram certo.
+- **Logomarca** oficial da NFS-e em `src/main/resources/danfse/`, baixada do link da NT (item 2.4.3).
+- Blocos sem dados viram a linha das Notas 2–4 e cedem altura (item 2.3); a linha de PIS/COFINS
+  próprios some após 2026 (Nota 6).
+- **Descrição do Serviço e Informações Complementares dividem o espaço que sobra**: estas ficam
+  com o que o conteúdo delas precisa, aquela com o resto. Com as alturas da tabela da NT ao pé da
+  letra, uma descrição de 1.300 caracteres numa nota com todos os blocos saía em **uma linha**,
+  com 5 cm em branco embaixo. A NT chama essas alturas e os limites de caracteres de sugestão
+  (item 2.1); o obrigatório — modelo do Anexo I e página única — se mantém.
+- **A descrição sai inteira, sem o corte em 1.300 caracteres** da tabela: o XSD admite 2.000, e a
+  página comporta ~2.600 mesmo no pior caso. `DanfseServiceTest` fixa isso com 2.000 caracteres e
+  todos os blocos presentes.
 
-Alternativa que não depende da Receita: gerar o PDF localmente a partir do XML da NFS-e, como faz
-o módulo `nfe-danfe` de `nfe-sefaz-sp` (JasperReports, `DanfeService.gerarPdf`). A biblioteca já
-recupera o XML pela consulta por chave, então falta só o leiaute.
+Conferido visualmente contra o Anexo I com a nota 236 (produção, cancelada) e a de produção
+restrita de 27/10/2026. O fixture de teste é esta última com nomes, endereços e contatos trocados
+por dados fictícios — o repositório é público.
 
 ### Regras de negócio da emissão (`ANEXO_I`, aba `RN DPS_NFS-e`)
 
@@ -688,7 +714,7 @@ Xerces falha de forma intermitente quando o módulo de schemas entra como jar.
 Java 21 e Maven 3.8+ (o Maven local já roda em 21 por padrão).
 
 ```bash
-mvn clean install              # build completo (173 testes), instala em ~/.m2
+mvn clean install              # build completo (197 testes), instala em ~/.m2
 TZ=UTC mvn clean install       # o servidor roda em UTC; rode assim antes de um deploy
 mvn clean install -DskipTests  # só empacota
 mvn clean compile              # regenera o JAXB do nfse-nacional-schemas
@@ -714,7 +740,7 @@ mvn test -pl nfse-nacional-service -DfailIfNoTests=false \
 | `ConsultasSefinIT` | Só leitura. Varre todas as rotas de consulta e mapeia em qual host cada uma atende |
 | `ParametrosMunicipaisIT` | Só leitura. Parâmetros municipais e consultas de evento |
 | `DistribuicaoDFeIT` | Só leitura. Varredura por NSU, com pausas por causa do rate limit |
-| `DanfseIT` | Só leitura. Sonda o DANFSE, hoje fora do ar |
+| `DanfseIT` | Só leitura. Sonda a API nacional de DANFSE, suspensa pela NT 008 — o PDF hoje é local |
 | `BaixarSwaggerIT` | Só leitura. Atualiza `doc/openapi/` com as especificações oficiais |
 | `ContratoSefinIT` | Diagnóstico: POST cru em `/nfse` despejando corpo enviado e recebido |
 | `EmitirNfseIT` | Emissão pela fachada, com a DPS montada pelo `DpsBuilder` |
@@ -768,6 +794,8 @@ controla a numeração via `nfse-test-sequence.txt` (gitignored) para não repet
   A da Sefin fica num caminho fora do padrão: `<base>/swagger/docs/v1`.
 - Índice: https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica
 - `doc/manual-contribuintes-emissor-publico-api-v1.2-out2025.pdf` — rotas e semântica das APIs
+- `doc/nt-008-se-cgnfse-danfse-v1.02-20260714.pdf` — especificação do DANFSe: tabela de
+  coordenadas (item 2.4.5), modelo (Anexo I) e regras de cancelamento/substituição
 - `doc/guia-utilizacao-apis-adn.pdf` — cobre só duas rotas, ambas em `<adn>/contribuintes`:
   `GET /NFSe/{chave}/Eventos` (implementada) e `GET /DFe/{NSU}`, a distribuição de DF-e, **não
   implementada**. Esta última aceita os parâmetros de query `cnpjConsulta` e `lote`, e o
