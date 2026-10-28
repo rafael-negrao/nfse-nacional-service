@@ -23,7 +23,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * <ol>
  *   <li>{@code -Dnfse.cert.p12=/caminho/cert.pfx} e {@code -Dnfse.cert.senha=…};</li>
  *   <li>na ausência das properties, o primeiro {@code .pfx}/{@code .p12} sob {@code certificado/}
- *       na raiz do repositório, com a senha lida do {@code senha.txt} irmão.</li>
+ *       na raiz do repositório, com a senha lida do {@code <nome>.senha.txt} irmão ou, na falta
+ *       dele, do {@code senha.txt} da pasta.</li>
  * </ol>
  *
  * <p>O diretório {@code certificado/} é ignorado pelo git; nenhuma senha é gravada em código nem
@@ -148,7 +149,11 @@ final class CertificadoDeTeste {
         if (informada != null && !informada.isBlank()) {
             return Optional.of(informada.toCharArray());
         }
-        Path senhaTxt = p12.getParent().resolve("senha.txt");
+        // Com o certificado renovado, a pasta guarda o vencido e o novo lado a lado; a senha nomeada
+        // como o próprio arquivo ("<nome>.senha.txt") prevalece sobre a genérica da pasta.
+        String nome = p12.getFileName().toString();
+        Path senhaDoArquivo = p12.resolveSibling(nome.substring(0, nome.lastIndexOf('.')) + ".senha.txt");
+        Path senhaTxt = Files.exists(senhaDoArquivo) ? senhaDoArquivo : p12.getParent().resolve("senha.txt");
         if (Files.exists(senhaTxt)) {
             return Optional.of(Files.readString(senhaTxt).trim().toCharArray());
         }
