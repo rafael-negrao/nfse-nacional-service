@@ -159,6 +159,13 @@ NFS-e é o **default** — exatamente o que `XmlSigningService` e `MarshallerNfs
 Falta: os eventos de município (que o contribuinte não emite), a manifestação contra a Sefin, e a
 emissão em produção (CNC de São Paulo).
 
+## Guia do consumidor
+
+`GUIA-DE-USO.md` ensina a usar a biblioteca a partir de outro projeto (ex.: `cms-root`) — é o
+material para entregar ao assistente de lá. **Ao mudar a API pública, um comportamento observado no
+ambiente ou uma regra de rejeição, atualize o guia junto**; ele afirma assinaturas e códigos
+concretos, e um guia desatualizado ensina errado com confiança.
+
 ## Projeto de referência
 
 `/Users/rafael_negrao/projects/adelfo/nfe-sefaz-sp` é a origem do padrão arquitetural. Consulte-o

@@ -6,6 +6,10 @@ Biblioteca Java para **emitir, consultar e cancelar NFS-e** no [Sistema Nacional
 A aplicação consumidora expõe um `@Bean CertificadoDigital` e recebe o `NfseService` pronto. Nenhuma
 outra configuração é obrigatória.
 
+**Vai usar a biblioteca em outro projeto?** Leia o [`GUIA-DE-USO.md`](GUIA-DE-USO.md): referência
+completa de cada operação, inclusive a impressão (DANFSe), com os códigos de rejeição e as
+armadilhas já encontradas contra o ambiente real.
+
 ---
 
 ## Estado
