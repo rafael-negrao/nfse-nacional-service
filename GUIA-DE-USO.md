@@ -664,13 +664,12 @@ VALOR APROXIMADO DOS TRIBUTOS (17.35%): R$ 107.57 FONTE: IBPT EMPRESA OPTANTE PE
 (85%) e `CALIBRAÇÃO EM EQUIPAMENTO …` (13%), seguidos de OS, pedido, contrato/parcela e vencimento.
 
 ```java
-static final BigDecimal PERCENTUAL_IBPT = new BigDecimal("17.35");   // confirmar a vigência com o contador
-
-// Divisão do IBPT por esfera para o serviço 14.01 — PENDENTE: preencher com a tabela vigente.
-// A soma deve bater com PERCENTUAL_IBPT. Duas casas decimais (TSDec), senão a Sefin recusa.
-static final BigDecimal IBPT_FEDERAL   = null;
-static final BigDecimal IBPT_ESTADUAL  = null;
-static final BigDecimal IBPT_MUNICIPAL = null;
+// Tabela IBPT de SP, versão 26.2.B (vigência 20/09 a 31/10/2026), linha "1401" tipo 2 (LC 116).
+// Muda a cada versão — leia do CSV vigente em vez de fixar no código. Duas casas (TSDec).
+static final BigDecimal IBPT_FEDERAL   = new BigDecimal("13.45");   // coluna nacionalfederal
+static final BigDecimal IBPT_ESTADUAL  = new BigDecimal("0.00");
+static final BigDecimal IBPT_MUNICIPAL = new BigDecimal("3.90");
+static final BigDecimal PERCENTUAL_IBPT = IBPT_FEDERAL.add(IBPT_ESTADUAL).add(IBPT_MUNICIPAL);  // 17.35
 
 static String descricaoComaho(String servico, BigDecimal valor) {
     BigDecimal tributos = valor.multiply(PERCENTUAL_IBPT).movePointLeft(2).setScale(2, RoundingMode.HALF_UP);
@@ -739,13 +738,18 @@ IBS/CBS, competência = emissão, leiaute da NT 009. O que a tela fez diferente:
    O específico, que o Emissor Web adotou, é `120018200`, *"Serviços de manutenção e reparação de
    instrumentos e equipamentos médico-hospitalares, odontológicos, óticos e de precisão"*. A NBS
    tende a pesar na classificação do IBS/CBS; a receita já usa o específico — confirme com o contador.
-2. **Total de tributos por esfera.** O correto é preencher federais, estaduais e municipais com a
-   tabela do IBPT para o serviço (`totalTributosPercentual`), não zeros nem o `pTotTribSN`. O
-   histórico só dá o total, 17,35%; **a divisão por esfera ainda falta** e sai da tabela do IBPT
-   vigente (ou do contador). Para serviço, o estadual tende a ser zero. Com o campo preenchido, o
-   DANFSe já imprime os percentuais — o texto "VALOR APROXIMADO DOS TRIBUTOS" na descrição vira
-   redundante; manter ou não é escolha do usuário.
-3. **Percentual IBPT.** 17,35% fixo o ano todo; a tabela do IBPT é revisada periodicamente.
+2. **Total de tributos por esfera — resolvido.** Preencha federais, estaduais e municipais com a
+   tabela do IBPT (`totalTributosPercentual`), não zeros nem o `pTotTribSN`. Na tabela de SP, a
+   linha do item 14.01 (`codigo 1401`, `tipo 2` = LC 116) dá **13,45% federal, 0,00% estadual e
+   3,90% municipal — soma 17,35%**, exatamente o percentual do histórico. Com o campo preenchido, o
+   DANFSe já imprime os três; o texto "VALOR APROXIMADO DOS TRIBUTOS" na descrição vira redundante —
+   manter ou não é escolha do usuário.
+3. **Versão do IBPT.** A tabela sai em versões com vigência de semanas (a 26.2.B vale de 20/09 a
+   31/10/2026). Os valores do 14.01 não mudaram o ano todo, mas leia do CSV vigente em vez de fixar.
+   O IBPT distribui um CSV por UF (`TabelaIBPTax<UF><versão>.csv`, `;`, ISO-8859-1, colunas
+   `codigo;ex;tipo;descricao;nacionalfederal;importadosfederal;estadual;municipal;…`). Procure pelo
+   código da LC 116 (`tipo 2`): as linhas de NBS (`tipo 1`) seguem a NBS 1.0, e nem `120018200` nem
+   `111019000` estão lá. Use `nacionalfederal`; `importadosfederal` é de mercadoria importada.
 4. **Valor zero.** Uma das 341 notas saiu com `vServ 0.00`; não repita — emita com o valor real.
 
 Fora do perfil (nunca visto no histórico — **pergunte antes de implementar**): retenção de ISSQN,
