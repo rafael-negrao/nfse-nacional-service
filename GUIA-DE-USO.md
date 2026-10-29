@@ -184,14 +184,25 @@ notas não têm validade jurídica. O ambiente do request precisa ser o mesmo do
 cancelamento é um **evento** separado. Para saber se uma nota está cancelada, use
 `consultarSituacao` — **nunca** o `cStat` da consulta por chave.
 
-**O ADN atrasa — em geral ~30 s, mas já passou de 15 minutos.** Notas e eventos chegam ao ADN
+**O ADN atrasa — em geral ~30 s, e pode não receber o evento.** Notas e eventos chegam ao ADN
 depois do processamento na Sefin. Logo após emitir ou cancelar, `consultarSituacao` pode responder
 `NAO_ENCONTRADA` ou `VALIDA`. Para confirmar a operação que você acabou de fazer, use o retorno
 dela; para conferir depois, `consultarEvento(ConsultaEventoRequest.cancelamento(...))` consulta a
-**Sefin**, que registra o evento na hora. Em 28/10/2026 (produção restrita) um cancelamento
-constava na Sefin às 09:08 e às 09:21 o ADN ainda só tinha a nota — no mesmo dia, outro
-cancelamento chegou em menos de 45 s. Não trate `VALIDA` recente como prova de que o cancelamento
-falhou.
+**Sefin**, que registra o evento na hora. Não trate `VALIDA` no ADN como prova de que o
+cancelamento falhou.
+
+Em 28/10/2026 (produção restrita), duas notas da mesma empresa foram canceladas com minutos de
+diferença:
+
+| Nota | Serviço | Sefin | ADN |
+|---|---|---|---|
+| `…0126101339161070` | `140101`, ISSQN tributável em São Paulo | evento registrado | `CANCELADA` em menos de 45 s |
+| `…0226108642141870` | `990101` (item 99), sem incidência de ISSQN | evento registrado às 09:08:04 | ainda `VALIDA` às 10:21 — só a nota, sem o evento |
+
+A hipótese é que o evento de nota **sem município de incidência** não seja distribuído ao ADN, ou
+demore muito mais — não confirmada: é um caso só. Se você emite pelo item 99 (locação de bens
+móveis, por exemplo), não derive a situação só do ADN: guarde o retorno do cancelamento e, na
+dúvida, consulte a Sefin.
 
 **Não existe consulta por período.** Nenhuma rota aceita intervalo de datas. Para descobrir notas
 sem conhecer a chave (por exemplo, notas recebidas de fornecedores), use a **distribuição por
@@ -1470,7 +1481,7 @@ Depois de emitir:
 
 - [ ] guardar `chaveAcesso` e `xmlNfse`;
 - [ ] situação por `consultarSituacao`, nunca pelo `cStat`;
-- [ ] não confiar no ADN logo após a operação (em geral ~30 s; já passou de 15 min) — confirme pela Sefin;
+- [ ] não confiar no ADN logo após a operação (em geral ~30 s; no item 99 o cancelamento passou de 1 h sem chegar) — confirme pela Sefin;
 - [ ] PDF com `comSituacao(...)`.
 
 Armadilhas que já custaram tempo:

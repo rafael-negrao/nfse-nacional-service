@@ -377,9 +377,11 @@ Swagger do ADN) e a solicitação de análise fiscal pendente. `NfseService.cons
 atalho. O ADN recebe nota e evento **~30 s depois** do processamento na Sefin (27/10/2026: `dhProc`
 17:29:52, geração no ADN 17:30:24) — consultar a situação logo após a operação engana. **E nem
 sempre são 30 s:** em 28/10/2026 o cancelamento da nota de teste `…0226108642141870` (item 99,
-não incidência) constava na Sefin às 09:08:04 e ainda não tinha chegado ao ADN às 09:21, enquanto o
-da `…0126101339161070`, do mesmo dia, chegou em menos de 45 s. A Sefin (`consultarEvento`) é a
-confirmação imediata; o ADN é eventual.
+não incidência) constava na Sefin às 09:08:04 e **ainda não tinha chegado ao ADN às 10:21** — a
+rota `/Eventos` devolvia só a nota —, enquanto o da `…0126101339161070` (`140101`, ISSQN em São
+Paulo), do mesmo dia, chegou em menos de 45 s. Hipótese, com um caso só: o evento de nota sem
+município de incidência não é distribuído ao ADN, ou demora muito mais. A Sefin (`consultarEvento`)
+é a confirmação imediata; o ADN é eventual — e para o item 99 talvez nem isso.
 
 Duas armadilhas confirmadas em produção:
 
