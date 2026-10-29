@@ -167,6 +167,9 @@ segue sem resposta da Sefin**.
 Uma NFS-e real de produção já foi consultada e confirma decisões de implementação: a assinatura da
 Receita usa `rsa-sha1` + C14N + enveloped, o `<Signature>` sai **sem prefixo** e o namespace da
 NFS-e é o **default** — exatamente o que `XmlSigningService` e `MarshallerNfse` produzem.
+**Correção (28/10/2026):** aquela assinatura era da Prefeitura de São Paulo (nota de `tpEmis 2`). A
+Sefin assina a NFS-e que ela gera com `rsa-sha256` + `xml-exc-c14n#WithComments`; a DPS assinada pela
+biblioteca com `rsa-sha1` é aceita, e a do Emissor Web vai sem assinatura.
 
 Falta: os eventos de município (que o contribuinte não emite), a manifestação contra a Sefin, e a
 emissão em produção (CNC de São Paulo).
@@ -377,11 +380,11 @@ Swagger do ADN) e a solicitação de análise fiscal pendente. `NfseService.cons
 atalho. O ADN recebe nota e evento **~30 s depois** do processamento na Sefin (27/10/2026: `dhProc`
 17:29:52, geração no ADN 17:30:24) — consultar a situação logo após a operação engana. **E nem
 sempre são 30 s:** em 28/10/2026 o cancelamento da nota de teste `…0226108642141870` (item 99,
-não incidência) constava na Sefin às 09:08:04 e **ainda não tinha chegado ao ADN às 10:21** — a
-rota `/Eventos` devolvia só a nota —, enquanto o da `…0126101339161070` (`140101`, ISSQN em São
-Paulo), do mesmo dia, chegou em menos de 45 s. Hipótese, com um caso só: o evento de nota sem
-município de incidência não é distribuído ao ADN, ou demora muito mais. A Sefin (`consultarEvento`)
-é a confirmação imediata; o ADN é eventual — e para o item 99 talvez nem isso.
+não incidência) constava na Sefin às 09:08:04, **ainda não tinha chegado ao ADN às 10:21** — a
+rota `/Eventos` devolvia só a nota — e chegou até as 22:42; o da `…0126101339161070` (`140101`, ISSQN
+em São Paulo), do mesmo dia, chegou em menos de 45 s, e dois cancelamentos `140101` da noite em
+~35 s. Se o item 99 tem a ver com isso, um caso só não diz. A Sefin (`consultarEvento`) é a
+confirmação imediata; o ADN é eventual, com atraso que pode passar de uma hora.
 
 Duas armadilhas confirmadas em produção:
 

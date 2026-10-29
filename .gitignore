@@ -25,3 +25,6 @@ infraestrutura/**/*_vars_file.yml
 
 # Sequência de numeração das DPS dos testes de integração — estado local de execução.
 nfse-test-sequence.txt
+
+# Notas fiscais reais (XML/PDF) baixadas para análise — dados de contribuintes, nunca no repositório.
+arquivos/

@@ -184,7 +184,7 @@ notas não têm validade jurídica. O ambiente do request precisa ser o mesmo do
 cancelamento é um **evento** separado. Para saber se uma nota está cancelada, use
 `consultarSituacao` — **nunca** o `cStat` da consulta por chave.
 
-**O ADN atrasa — em geral ~30 s, e pode não receber o evento.** Notas e eventos chegam ao ADN
+**O ADN atrasa — em geral ~30 s, mas já passou de uma hora.** Notas e eventos chegam ao ADN
 depois do processamento na Sefin. Logo após emitir ou cancelar, `consultarSituacao` pode responder
 `NAO_ENCONTRADA` ou `VALIDA`. Para confirmar a operação que você acabou de fazer, use o retorno
 dela; para conferir depois, `consultarEvento(ConsultaEventoRequest.cancelamento(...))` consulta a
@@ -197,12 +197,12 @@ diferença:
 | Nota | Serviço | Sefin | ADN |
 |---|---|---|---|
 | `…0126101339161070` | `140101`, ISSQN tributável em São Paulo | evento registrado | `CANCELADA` em menos de 45 s |
-| `…0226108642141870` | `990101` (item 99), sem incidência de ISSQN | evento registrado às 09:08:04 | ainda `VALIDA` às 10:21 — só a nota, sem o evento |
+| `…0226108642141870` | `990101` (item 99), sem incidência de ISSQN | evento registrado às 09:08:04 | ainda `VALIDA` às 10:21 — só a nota; `CANCELADA` às 22:42 |
 
-A hipótese é que o evento de nota **sem município de incidência** não seja distribuído ao ADN, ou
-demore muito mais — não confirmada: é um caso só. Se você emite pelo item 99 (locação de bens
-móveis, por exemplo), não derive a situação só do ADN: guarde o retorno do cancelamento e, na
-dúvida, consulte a Sefin.
+O evento chegou — entre 73 minutos e 13,5 horas depois. Se o atraso tem a ver com a nota não ter
+município de incidência não dá para dizer com um caso só: na mesma noite, dois cancelamentos de
+notas `140101` chegaram em ~35 s. Com qualquer serviço, não derive a situação recente só do ADN:
+guarde o retorno do cancelamento e, na dúvida, consulte a Sefin.
 
 **Não existe consulta por período.** Nenhuma rota aceita intervalo de datas. Para descobrir notas
 sem conhecer a chave (por exemplo, notas recebidas de fornecedores), use a **distribuição por
@@ -592,7 +592,21 @@ isso a nota **não destaca nada**:
   `E0625`;
 - **sem** `pisCofins` e sem `retencoesFederais` — o optante é dispensado da retenção de IRRF
   (IN RFB 765/2007, art. 1º) e não destaca PIS/COFINS;
-- `totalTributos(0, 0, 0)` é o que o histórico real usa (ver o perfil abaixo).
+- o **total aproximado de tributos (Lei 12.741) é obrigatório** para ME/EPP: `semTotalTributos()`
+  (`indTotTrib`) é `E0712`. Sobram três formas — valores (`totalTributos`), percentuais
+  (`totalTributosPercentual`) ou o percentual do Simples (`totalTributosSimplesNacional`). Para MEI
+  esta última é `E0710`; para não optante, ela e `semTotalTributos()` são `E0713`.
+
+As três formas do total de tributos, e o que o DANFSe imprime em "Informações Complementares":
+
+| Método | Elemento | DANFSe |
+|---|---|---|
+| `totalTributos(fed, est, mun)` | `vTotTrib` — R$ por esfera | "Federais: R$ …; Estaduais: R$ …; Municipais: R$ …" |
+| `totalTributosPercentual(fed, est, mun)` | `pTotTrib` — % por esfera | "Federais: …%; Estaduais: …%; Municipais: …%" |
+| `totalTributosSimplesNacional(p)` | `pTotTribSN` — % único | "Simples Nacional: …%" (o DANFSe do Emissor Web mostra "-" nas três esferas) |
+
+Os percentuais por esfera vêm da tabela do IBPT para o código do serviço; o percentual do Simples é
+a alíquota efetiva do DAS. **São números diferentes** — não use um no lugar do outro.
 
 Exceções que existem e que o perfil precisa declarar explicitamente: **retenção de ISSQN** exigida
 por alguns tomadores (órgão público, por lei municipal) e **retenção de INSS** (`vRetCP`) em cessão
@@ -611,16 +625,16 @@ Prefeitura de São Paulo; a emissão por esta biblioteca deve reproduzir a mesma
 | `opSimpNac` / `regApTribSN` / `regEspTrib` | `3` / `1` / `0` | `optanteSimplesNacionalMeEpp("1")`, `semRegimeEspecial()` |
 | `cTribNac` | `140101` — manutenção e conservação de máquinas, aparelhos e equipamentos | `servico("140101", descricao)` |
 | `cTribMun` | `009` | `codigoTributacaoMunicipal("009")` |
-| `cNBS` | `999999999` (genérico) | `codigoNbs(...)` — ver decisão abaixo |
+| `cNBS` | `999999999` (genérico); o Emissor Web usa `120018200` | `codigoNbs("120018200")` — ver decisão abaixo |
 | `cLocPrestacao` / `cLocIncid` | `3550308` (São Paulo), **mesmo com tomador em outra cidade** | `servicoPrestadoNoMunicipio("3550308")` |
 | `tribISSQN` / `tpRetISSQN` | `1` / `1` — tributável, não retido | `issqnTributavel()`, `issqnNaoRetido()` |
 | `pAliq` | `0.00` no histórico | **omitir** (`E0625`) |
 | Grupo federal | ausente | — |
-| `totTrib` | `0.00` / `0.00` / `0.00` | `totalTributos(ZERO, ZERO, ZERO)` |
+| `totTrib` | `0.00` / `0.00` / `0.00` — e o IBPT só na descrição | `totalTributosPercentual(fed, est, mun)` do IBPT — ver decisão abaixo |
 | IBS/CBS | ausente | não chamar `ibsCbs(...)` |
 | Descontos, deduções, intermediário | nunca | — |
 | `cIntContrib` | 13 dígitos (número interno) | `codigoInterno(...)` |
-| Série | `1` | `identificacao("1", …)` |
+| Série | `1` | `identificacao("1", …)` — a faixa de aplicativo próprio é `1`–`49999` (`E0010`) |
 
 No resultado, `vBC = vServ`, `vISSQN = 0.00` e `vLiq = vServ` em todas — nada sai do líquido.
 
@@ -652,6 +666,12 @@ VALOR APROXIMADO DOS TRIBUTOS (17.35%): R$ 107.57 FONTE: IBPT EMPRESA OPTANTE PE
 ```java
 static final BigDecimal PERCENTUAL_IBPT = new BigDecimal("17.35");   // confirmar a vigência com o contador
 
+// Divisão do IBPT por esfera para o serviço 14.01 — PENDENTE: preencher com a tabela vigente.
+// A soma deve bater com PERCENTUAL_IBPT. Duas casas decimais (TSDec), senão a Sefin recusa.
+static final BigDecimal IBPT_FEDERAL   = null;
+static final BigDecimal IBPT_ESTADUAL  = null;
+static final BigDecimal IBPT_MUNICIPAL = null;
+
 static String descricaoComaho(String servico, BigDecimal valor) {
     BigDecimal tributos = valor.multiply(PERCENTUAL_IBPT).movePointLeft(2).setScale(2, RoundingMode.HALF_UP);
     return servico
@@ -675,12 +695,12 @@ DpsBuilder dps = DpsBuilder.novo()
         .servicoPrestadoNoMunicipio("3550308")                // SP mesmo com tomador de fora
         .servico("140101", descricaoComaho("MANUTENÇÃO EM EQUIPAMENTO …", valor))
         .codigoTributacaoMunicipal("009")
-        .codigoNbs("999999999")                               // ou "120018200" — ver abaixo
+        .codigoNbs("120018200")                               // o que o Emissor Web usa — ver abaixo
         .codigoInterno(numeroInterno)
         .valorServico(valor)
         .issqnTributavel()
         .issqnNaoRetido()
-        .totalTributos(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+        .totalTributosPercentual(IBPT_FEDERAL, IBPT_ESTADUAL, IBPT_MUNICIPAL);  // ver abaixo
 ```
 
 **Validada em produção restrita em 28/10/2026** com o certificado da Comaho: emitida na primeira
@@ -695,16 +715,37 @@ ADN. O que a nota mostrou:
 - nos valores da NFS-e o optante recebe só `vLiq` — sem `vBC`, `pAliqAplic` e `vISSQN`, que o
   sistema da Prefeitura preenchia com zeros. O DANFSe mostra "-" nesses campos.
 
+**Comparada com o Emissor Nacional web (28/10/2026).** Comaho e Adelfo emitiram uma nota cada pela
+interface gráfica, em produção restrita, com o mesmo serviço. A tributação saiu idêntica à desta
+receita — regime, `140101`/`009`, tributável sem retenção, sem alíquota, sem federais e sem
+IBS/CBS, competência = emissão, leiaute da NT 009. O que a tela fez diferente:
+
+- **NBS `120018200`** em vez do `999999999` do histórico — a NFS-e traz o `xNBS` preenchido;
+- **série `70000`**, a faixa do Emissor Web (`70000`–`79999`); a numeração da DPS é por série, e
+  a web começou em `70000/1`. A biblioteca usa a faixa de aplicativo próprio (`1`–`49999`) — série
+  da web aqui seria `E0010`;
+- o **número da NFS-e é um só por CNPJ**, qualquer que seja o canal: a Comaho tinha as notas 1 e 2
+  emitidas pela biblioteca, e a da web saiu com o 3. Alternar entre web e biblioteca não colide;
+- a tela **exige** o total de tributos (`E0712`); nas duas notas foi preenchido `pTotTribSN 2.00`
+  só para conseguir emitir — **não é a alíquota da empresa e não deve ser copiado**. O correto é
+  informar federais, estaduais e municipais (decisão 2 abaixo);
+- a DPS da web vai **sem assinatura** (`procEmi 2`, `verAplic EmissorWeb_…`); a da biblioteca é
+  assinada pelo certificado (`procEmi 1`). Nos dois casos a Sefin assina a NFS-e com `rsa-sha256`;
+- o prestador da Adelfo levou telefone e e-mail (`prestadorContato`); o da Comaho, nada.
+
 **Decisões em aberto, para o usuário/contador:**
 
 1. **NBS.** O histórico usa `999999999`, o código genérico — aceito pela Sefin em produção restrita.
-   O código específico é `120018200`, *"Serviços de manutenção e reparação de instrumentos e
-   equipamentos médico-hospitalares, odontológicos, óticos e de precisão"*. A NBS tende a pesar
-   na classificação do IBS/CBS; escolha com o contador.
-2. **Percentual IBPT.** 17,35% fixo o ano todo; a tabela do IBPT é revisada periodicamente.
-3. **`totTrib` zerado com o percentual na descrição** reproduz o histórico. O leiaute tem campo
-   próprio para o optante (`totalTributosSimplesNacional(p)`), que leva o percentual da alíquota do
-   Simples — não o do IBPT. Trocar é decisão do contador.
+   O específico, que o Emissor Web adotou, é `120018200`, *"Serviços de manutenção e reparação de
+   instrumentos e equipamentos médico-hospitalares, odontológicos, óticos e de precisão"*. A NBS
+   tende a pesar na classificação do IBS/CBS; a receita já usa o específico — confirme com o contador.
+2. **Total de tributos por esfera.** O correto é preencher federais, estaduais e municipais com a
+   tabela do IBPT para o serviço (`totalTributosPercentual`), não zeros nem o `pTotTribSN`. O
+   histórico só dá o total, 17,35%; **a divisão por esfera ainda falta** e sai da tabela do IBPT
+   vigente (ou do contador). Para serviço, o estadual tende a ser zero. Com o campo preenchido, o
+   DANFSe já imprime os percentuais — o texto "VALOR APROXIMADO DOS TRIBUTOS" na descrição vira
+   redundante; manter ou não é escolha do usuário.
+3. **Percentual IBPT.** 17,35% fixo o ano todo; a tabela do IBPT é revisada periodicamente.
 4. **Valor zero.** Uma das 341 notas saiu com `vServ 0.00`; não repita — emita com o valor real.
 
 Fora do perfil (nunca visto no histórico — **pergunte antes de implementar**): retenção de ISSQN,
@@ -1481,7 +1522,7 @@ Depois de emitir:
 
 - [ ] guardar `chaveAcesso` e `xmlNfse`;
 - [ ] situação por `consultarSituacao`, nunca pelo `cStat`;
-- [ ] não confiar no ADN logo após a operação (em geral ~30 s; no item 99 o cancelamento passou de 1 h sem chegar) — confirme pela Sefin;
+- [ ] não confiar no ADN logo após a operação (em geral ~30 s; um cancelamento levou mais de 1 h) — confirme pela Sefin;
 - [ ] PDF com `comSituacao(...)`.
 
 Armadilhas que já custaram tempo:
