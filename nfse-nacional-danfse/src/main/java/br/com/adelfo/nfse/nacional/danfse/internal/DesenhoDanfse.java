@@ -18,6 +18,8 @@ import com.lowagie.text.pdf.PdfWriter;
 
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -29,8 +31,11 @@ import java.util.Map;
  * fica em {@link #y(double)} e {@link #cm(double)}.
  *
  * <p><b>Fontes:</b> a NT pede Arial nos títulos e Microsoft Sans Serif no conteúdo, ambas
- * proprietárias. Usa-se a Helvetica das 14 fontes-padrão do PDF, que tem as mesmas métricas da
- * Arial e não precisa ser embutida.
+ * proprietárias — não podem ir num repositório público. Usa-se a <b>Liberation Sans</b> (SIL OFL
+ * 1.1, licença em {@code danfse/fontes/}), feita com as mesmas métricas da Arial, <b>embutida</b>
+ * no PDF. Antes era a Helvetica das 14 fontes-padrão, sem embutir: cada visualizador a trocava pelo
+ * que tinha, e alguns mostravam os rótulos sem negrito — diferença visível ao lado do DANFSe do
+ * Emissor Nacional, que embute Arial.
  *
  * <p>Não é thread-safe: uma instância por documento.
  */
@@ -63,16 +68,33 @@ public final class DesenhoDanfse {
     /** "NFS-e SEM VALIDADE JURÍDICA": vermelho M100/Y100. */
     private static final Color VERMELHO = new Color(237, 28, 36);
 
+    private static final String FONTE_NORMAL = "danfse/fontes/LiberationSans-Regular.ttf";
+    private static final String FONTE_NEGRITO = "danfse/fontes/LiberationSans-Bold.ttf";
+    /** ~400 KB cada; lidas uma vez. No PDF entra só o subconjunto de glifos usados. */
+    private static final byte[] TTF_NORMAL = recurso(FONTE_NORMAL);
+    private static final byte[] TTF_NEGRITO = recurso(FONTE_NEGRITO);
+
     private final BaseFont normal;
     private final BaseFont negrito;
     private PdfContentByte cb;
 
     public DesenhoDanfse() {
         try {
-            normal = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
-            negrito = BaseFont.createFont(BaseFont.HELVETICA_BOLD, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
+            normal = BaseFont.createFont(FONTE_NORMAL, BaseFont.CP1252, BaseFont.EMBEDDED, true, TTF_NORMAL, null);
+            negrito = BaseFont.createFont(FONTE_NEGRITO, BaseFont.CP1252, BaseFont.EMBEDDED, true, TTF_NEGRITO, null);
         } catch (Exception e) {
             throw new DanfseException("fontes do PDF indisponíveis", e);
+        }
+    }
+
+    private static byte[] recurso(String caminho) {
+        try (InputStream in = DesenhoDanfse.class.getClassLoader().getResourceAsStream(caminho)) {
+            if (in == null) {
+                throw new DanfseException("fonte ausente do classpath: " + caminho);
+            }
+            return in.readAllBytes();
+        } catch (IOException e) {
+            throw new DanfseException("falha ao carregar a fonte " + caminho, e);
         }
     }
 

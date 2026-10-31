@@ -341,8 +341,8 @@ ambiente real — leitura recomendada antes de mexer no leiaute ou na assinatura
   segue a regra da NF-e por analogia e não foi conferido contra uma chave real;
 - as três rotas de alíquota do ADN respondem 400 para qualquer código de serviço, inclusive códigos
   reais — defeito do lado deles, reproduzido nos dois ambientes;
-- o DANFSe usa Helvetica no lugar de Arial e Microsoft Sans Serif, que são proprietárias (mesmas
-  métricas da Arial). Ainda não há leiaute para os novos fatos geradores do IBS/CBS — a NT 008
+- o DANFSe usa Liberation Sans (SIL OFL), embutida, no lugar de Arial e Microsoft Sans Serif, que
+  são proprietárias (mesmas métricas da Arial). Ainda não há leiaute para os novos fatos geradores do IBS/CBS — a NT 008
   promete nota técnica própria para eles;
 - eventos de município e o subgrupo IBS/CBS no nível da NFS-e não são implementados: o primeiro não
   cabe ao contribuinte, o segundo exige integração com a Calculadora oficial.

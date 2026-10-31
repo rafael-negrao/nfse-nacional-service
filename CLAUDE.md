@@ -423,13 +423,19 @@ e devolve uma página A4. Não usa rede nem certificado. Decisões que valem sab
 - **Prestador vem do `infNFSe/emit` quando a DPS não o traz.** A NT aponta só `DPS/prest`, mas com
   `tpEmit = 1` nome e endereço do prestador são proibidos na DPS (`E0121`, `E0128`); seguir a NT ao
   pé da letra deixaria o bloco em branco em toda nota emitida pelo prestador.
-- **O CEP do `emit` vem sem o zero à esquerda** (`4273200`) — `Formatos.cep` completa.
+- **O CEP do `emit` vem sem o zero à esquerda** (`4273200`) — `Formatos.cep` completa. O DANFSe do
+  Emissor Nacional web não completa: imprime o prestador como `35.50308 / 4316070`, contra o
+  `nnnnnnn / nn.nnn-nnn` da NT (e formata o do tomador certo). Aqui segue-se a NT, não a web.
 - **A situação vem de fora** (`DanfseRequest.comSituacao`): a nota fica com `cStat 100` depois de
   cancelada, então a marca d'água "CANCELADA"/"SUBSTITUÍDA" (item 2.5) depende de
   `NfseService.consultarSituacao`.
-- **Fontes**: a NT pede Arial e Microsoft Sans Serif, proprietárias; usa-se Helvetica (base 14 do
-  PDF, mesmas métricas da Arial, sem embutir). O poppler (`pdftoppm`) a renderiza sem negrito — o
-  PDF referencia `Helvetica-Bold` e o Preview/Acrobat mostram certo.
+- **Fontes**: a NT pede Arial e Microsoft Sans Serif, proprietárias — não entram num repositório
+  público. Usa-se a **Liberation Sans 2.1.5** (SIL OFL 1.1, métricas da Arial), **embutida** em
+  subconjunto; os `.ttf` e a licença estão em `src/main/resources/danfse/fontes/`. Até 31/10/2026 era
+  a Helvetica das 14 fontes-padrão, sem embutir: cada visualizador escolhia a substituta, e alguns
+  (o poppler, por exemplo) mostravam os rótulos sem negrito — diferença notada ao comparar com o
+  DANFSe do Emissor Nacional, que embute Arial. O PDF passou de ~50 KB para ~85 KB, o mesmo porte do
+  da web. `DanfseServiceTest.fontesVaoEmbutidasNoPdf` guarda isso.
 - **Logomarca** oficial da NFS-e em `src/main/resources/danfse/`, baixada do link da NT (item 2.4.3).
 - Blocos sem dados viram a linha das Notas 2–4 e cedem altura (item 2.3); a linha de PIS/COFINS
   próprios some após 2026 (Nota 6).
@@ -742,7 +748,7 @@ Xerces falha de forma intermitente quando o módulo de schemas entra como jar.
 Java 21 e Maven 3.8+ (o Maven local já roda em 21 por padrão).
 
 ```bash
-mvn clean install              # build completo (197 testes), instala em ~/.m2
+mvn clean install              # build completo (198 testes), instala em ~/.m2
 TZ=UTC mvn clean install       # o servidor roda em UTC; rode assim antes de um deploy
 mvn clean install -DskipTests  # só empacota
 mvn clean compile              # regenera o JAXB do nfse-nacional-schemas

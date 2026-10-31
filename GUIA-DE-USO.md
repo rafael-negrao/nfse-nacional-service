@@ -714,6 +714,14 @@ ADN. O que a nota mostrou:
 - nos valores da NFS-e o optante recebe só `vLiq` — sem `vBC`, `pAliqAplic` e `vISSQN`, que o
   sistema da Prefeitura preenchia com zeros. O DANFSe mostra "-" nesses campos.
 
+**A receita como está acima também foi validada**, no mesmo dia: NBS `120018200` e
+`totalTributosPercentual(13.45, 0.00, 3.90)`. Emitida na primeira tentativa (nNFSe 4, DPS série 1
+nº 902, chave `…0426100755887756`) e cancelada às 23:15. A NFS-e traz o `xNBS` "Serviços de
+manutenção e reparação de instrumentos e equipamentos médico-hospitalares…" e o grupo
+`pTotTrib` com os três percentuais; o DANFSe imprime em Informações Complementares *"Federais:
+13,45%; Estaduais: 0,00%; Municipais: 3,90%"*. Com o texto do IBPT ainda na descrição, o total
+aparece duas vezes na página.
+
 **Comparada com o Emissor Nacional web (28/10/2026).** Comaho e Adelfo emitiram uma nota cada pela
 interface gráfica, em produção restrita, com o mesmo serviço. A tributação saiu idêntica à desta
 receita — regime, `140101`/`009`, tributável sem retenção, sem alíquota, sem federais e sem
@@ -1157,7 +1165,8 @@ documento fiscal, o PDF é auxiliar.
 
 ### Limitações conhecidas
 
-- fonte Helvetica no lugar de Arial/Microsoft Sans Serif (proprietárias; mesmas métricas);
+- fonte Liberation Sans, embutida, no lugar de Arial/Microsoft Sans Serif (proprietárias; mesmas
+  métricas da Arial). O PDF fica com ~85 KB;
 - descrições formatadas com espaços para alinhar colunas (alguns sistemas fazem "tabela" de itens
   assim) perdem o alinhamento — sem quebras de linha no XML não há como reconstruí-lo. Quebras de
   linha reais são respeitadas;

@@ -3,6 +3,8 @@ package br.com.adelfo.nfse.nacional.danfse;
 import br.com.adelfo.nfse.nacional.service.dto.response.SituacaoNfse;
 import com.lowagie.text.PageSize;
 import com.lowagie.text.Rectangle;
+import com.lowagie.text.pdf.PdfDictionary;
+import com.lowagie.text.pdf.PdfName;
 import com.lowagie.text.pdf.PdfReader;
 import com.lowagie.text.pdf.parser.PdfTextExtractor;
 import org.junit.jupiter.api.BeforeAll;
@@ -61,6 +63,30 @@ class DanfseServiceTest {
             Rectangle pagina = reader.getPageSize(1);
             assertEquals(PageSize.A4.getWidth(), pagina.getWidth(), 0.5);
             assertEquals(PageSize.A4.getHeight(), pagina.getHeight(), 0.5);
+        } finally {
+            reader.close();
+        }
+    }
+
+    @Test
+    void fontesVaoEmbutidasNoPdf() throws Exception {
+        // Fonte não embutida fica a cargo do visualizador, e alguns mostravam os rótulos sem negrito.
+        PdfReader reader = new PdfReader(danfse.gerarPdf(xml));
+        try {
+            List<String> embutidas = new ArrayList<>();
+            List<String> semArquivo = new ArrayList<>();
+            for (int i = 1; i < reader.getXrefSize(); i++) {
+                if (!(reader.getPdfObjectRelease(i) instanceof PdfDictionary d)
+                        || !PdfName.FONTDESCRIPTOR.equals(d.get(PdfName.TYPE))) {
+                    continue;
+                }
+                String nome = d.get(PdfName.FONTNAME).toString();
+                (d.contains(PdfName.FONTFILE2) ? embutidas : semArquivo).add(nome);
+            }
+            assertTrue(semArquivo.isEmpty(), "fontes sem arquivo embutido: " + semArquivo);
+            assertEquals(2, embutidas.size(), embutidas.toString());
+            assertTrue(embutidas.stream().anyMatch(n -> n.endsWith("+LiberationSans")), embutidas.toString());
+            assertTrue(embutidas.stream().anyMatch(n -> n.endsWith("+LiberationSans-Bold")), embutidas.toString());
         } finally {
             reader.close();
         }
