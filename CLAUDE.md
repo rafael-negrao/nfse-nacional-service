@@ -402,6 +402,19 @@ em São Paulo), do mesmo dia, chegou em menos de 45 s, e dois cancelamentos `140
 ~35 s. Se o item 99 tem a ver com isso, um caso só não diz. A Sefin (`consultarEvento`) é a
 confirmação imediata; o ADN é eventual, com atraso que pode passar de uma hora.
 
+**Em produção o atraso é de minutos, não de segundos** (04/11/2026, ambas `140101` da Comaho):
+
+| Nota | Na Sefin | Ainda ausente no ADN | Já no ADN |
+|---|---|---|---|
+| `…0226110237017444` (biblioteca) — emissão e cancelamento | 18:51:52 | 18:56 (nota inteira: 404 `E2241`) | até 19:43 (`CANCELADA`) |
+| `…0126110862237948` (Emissor Web) — emissão | 18:42 | — | até 18:56 |
+| `…0126110862237948` — cancelamento | 19:41:24 | 19:44 (`VALIDA`) | — |
+
+Nem a Sefin responde na hora em produção: a consulta do evento voltou 404 por ~75 s depois do
+cancelamento da `…0126110862237948`, e logo após o da `…0226110237017444` (que às 18:56 já
+constava). Por isso o passo 4 do `ComahoEmiteParaMcamasIT` tenta por 2 min, e o passo 5 (ADN, 3 min)
+costuma ser pulado em produção — o pulo não é falha.
+
 Duas armadilhas confirmadas em produção:
 
 - a rota `/Eventos` **não devolve só eventos** — a NFS-e vem junto, distinguida por
