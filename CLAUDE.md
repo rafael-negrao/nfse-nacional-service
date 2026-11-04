@@ -39,9 +39,25 @@ anterior foi resolvida:
 3. **`E0625`** — ME/EPP que apura ISSQN pelo Simples, sem retenção, não informa alíquota. A nota
    de referência traz `0.00`, mas veio do sistema próprio da Prefeitura.
 
-**Produção continua bloqueada pelo CNC de São Paulo** (situação `0` em 27/10/2026), e a partir de
-01/12/2026 também exigirá o leiaute novo — que a biblioteca já usa. O histórico abaixo explica o
-bloqueio; em produção restrita ele **caiu** entre 09/08 e 27/10/2026.
+**Produção liberou a Comaho em 04/11/2026 — com o convênio ainda em situação `0`.** Às 18:42 ela
+emitiu pelo Emissor Web nacional a nota `…0126110862237948` (R$ 1,00 para a MCamas, `cStat 100`,
+`nNFSe 1`, série `70000`); minutos depois o convênio de SP seguia respondendo `0`. **O indicador não
+acompanha a migração**, e o pré-voo do `ComahoEmiteParaMcamasIT` deixou de barrar o envio. A DPS
+embutida nessa nota **valida no XSD de fevereiro e é recusada no da NT 009** — confirmação de que
+produção está no leiaute de fevereiro. Comparada à que `build(LeiauteDps.FEVEREIRO_2026)` gera com os
+mesmos dados, a ordem dos elementos é a mesma; a web acrescenta só o **IM do prestador** (que em
+produção restrita era `E0120`), o endereço do tomador e `piscofins` com `CST 00`/`tpRetPisCofins 0`.
+**Às 18:51 a biblioteca emitiu e cancelou em produção**: `ComahoEmiteParaMcamasIT` com
+`LeiauteDps.FEVEREIRO_2026`, série `999`, nDPS `1` → nota `…0226110237017444` (`nNFSe 2`, `cStat 100`),
+cancelada no mesmo segundo (`e101101`, `nSeqEvento 1`). A DPS foi **sem** IM, sem endereço do tomador
+e sem `piscofins` — nada disso é exigido. Duas diferenças de produção em relação à produção restrita:
+a consulta do evento logo após o cancelamento respondeu **404** e só 4 min depois devolveu o evento (o
+passo 4 do IT agora tenta por 2 min); e o ADN, enquanto não recebe a nota, responde **404 com
+`E2241`** ("Chave de acesso da NFS-e não referencia o Contribuinte solicitante") — o mesmo código para
+"ainda não chegou". `DpsBuilder.build(LeiauteDps)` gera os dois leiautes — ver "Leiaute de fevereiro"
+abaixo.
+O histórico abaixo explica o bloqueio do CNC; em produção restrita ele **caiu** entre 09/08 e
+27/10/2026.
 
 **A emissão esbarrava no CNC de São Paulo, e isso ainda vale para produção.** Duas regras, a
 mesma causa: `E0120` ("IM do prestador não deve ser informado, pois **não existem informações
@@ -81,10 +97,10 @@ constava antes desta tabela, ficou superada). A Prefeitura mantém o sistema pr�
 consulta e emissão retroativa de fatos geradores até 31/10/2026. Comaho e Adelfo, ambas do
 Simples, passam a emitir pelo Emissor Nacional em novembro.
 
-**Mas produção só aceita o leiaute da NT 009 em 01/12/2026**, e a biblioteca só gera esse. Em
-28/10/2026 a DPS do perfil Comaho foi validada contra o pacote anterior (`Schemas/1.01`) e
-recusada — `finNFSe` na raiz da `infDPS` e `cNBS` antes de `xDescServ`. De 01/11 a 30/11 a
-biblioteca não emite em produção.
+**Mas produção só aceita o leiaute da NT 009 em 01/12/2026.** Em 28/10/2026 a DPS do perfil Comaho
+foi validada contra o pacote anterior (`Schemas/1.01`) e recusada — `finNFSe` na raiz da `infDPS` e
+`cNBS` antes de `xDescServ`. Desde 04/11/2026 `build(LeiauteDps.FEVEREIRO_2026)` converte a DPS para
+esse pacote; falta a primeira nota aceita pela Sefin para confirmar.
 
 A Adelfo é **optante do Simples** (`opSimpNac=3` na nota de referência), então cai justamente na
 faixa em disputa: hoje não está no CNC de São Paulo, e é isso que o `E0084` e o `E0120` relatam.
@@ -150,7 +166,8 @@ um CNPJ estabelecido onde o Emissor Nacional já opera.
 Por isso **a validação das rotas de escrita ficou bloqueada até São Paulo migrar**. Em produção
 restrita a situação virou `1` entre 09/08 e 27/10/2026, e a emissão passou; em produção, em
 27 e 28/10/2026, ainda era `0`. A data oficial para o Simples é 01/11/2026 (Resolução CGSN nº
-191/2026); para emitir pela biblioteca, produção ainda precisa do leiaute da NT 009 (01/12/2026).
+191/2026); até 30/11 produção espera o leiaute de fevereiro, que a biblioteca gera com
+`LeiauteDps.FEVEREIRO_2026`.
 
 Em vez de apostar numa das datas, `ParametrosMunicipaisIT.saoPauloJaMigrouParaOEmissorNacional`
 pergunta ao ambiente e imprime `LIBERADO` ou `AINDA NÃO`. Rode-o periodicamente — com
@@ -171,8 +188,7 @@ NFS-e é o **default** — exatamente o que `XmlSigningService` e `MarshallerNfs
 Sefin assina a NFS-e que ela gera com `rsa-sha256` + `xml-exc-c14n#WithComments`; a DPS assinada pela
 biblioteca com `rsa-sha1` é aceita, e a do Emissor Web vai sem assinatura.
 
-Falta: os eventos de município (que o contribuinte não emite), a manifestação contra a Sefin, e a
-emissão em produção (CNC de São Paulo).
+Falta: os eventos de município (que o contribuinte não emite) e a manifestação contra a Sefin.
 
 ## Guia do consumidor
 
@@ -692,6 +708,39 @@ comunicado do CGNFS-e (até lá, produção segue o leiaute da NT 004 v2.0). Uma
 move `indDest`/`dest` para a raiz da `infDPS`. **Este pacote ainda os tem em `IBSCBS`.** Quando o
 `E1235` voltar, compare com o pacote mais recente da mesma página.
 
+### Leiaute de fevereiro — gerado por conversão (`LeiauteDps`)
+
+Produção valida o pacote **`NFSe-ESQUEMAS_XSD-v1.01-20260209`** até 30/11/2026.
+`DpsBuilder.build(LeiauteDps.FEVEREIRO_2026)` monta a DPS na NT 009 e a converte em DOM, antes da
+assinatura (`ConversorLeiauteFevereiro2026`); `LeiauteDps.vigente(ambiente, data)` escolhe pela
+data, com a troca de 01/12 numa constante só. Não se gerou um segundo pacote JAXB: o `DpsBuilder`
+tem ~1.350 linhas sobre as classes da NT 009, e a diferença real é pequena.
+
+- **Só `tiposComplexos` e `tiposSimples` diferem** entre os pacotes — `DPS_v1.01.xsd` e os XSDs de
+  evento são idênticos, então o cancelamento não muda.
+- Na DPS sem ajuste de BC e sem imóvel a diferença é **de posição**: `finNFSe` sai da raiz (vai para
+  o 1º filho do `IBSCBS`, ou some se não houver o grupo — em fevereiro ele só existe lá);
+  `cNBS`/`cIntContrib` vão para depois de `xDescServ`; `CST`/`cClassTrib` descem para
+  `IBSCBS/valores/trib/gIBSCBS`.
+- **Recusado** por não ter equivalente: `vAjusteBC` (eram `vDedRed`/`gReeRepRes`), `imovel`
+  (refeito), `bensMoveis` (não existia), `IBSCBS` sem `cIndOp` (era obrigatório).
+- O XML convertido é **validado no XSD de fevereiro em todo `build`**, a partir de cópias em
+  `nfse-nacional-schemas/src/main/resources/xsd/fevereiro-2026/` (só validação, fora do `xjc`). É o
+  XSD que barra tomador sem `xNome` e CNPJ com letras, e a mensagem cita `E1235`.
+- **Divergência deliberada na cópia:** o `TSSerieDPS` de fevereiro é `^0{0,4}\d{1,5}$`, e em XSD
+  `^`/`$` são caracteres literais — nenhuma série real passa no Xerces. A cópia usa
+  `0{0,4}\d{1,5}`, com comentário no arquivo. O original está em `doc/schemas-oficiais/Schemas/1.01/`.
+- **Confirmado contra a Sefin de produção em 04/11/2026**: a DPS convertida da receita da Comaho foi
+  aceita (`…0226110237017444`) e cancelada. Antes, a DPS de uma nota da Comaho emitida pelo Emissor
+  Web já passava neste XSD e falhava no da NT 009, com a mesma ordem de elementos do conversor. `ComahoEmiteParaMcamasIT` com `-Dnfse.ambiente=producao
+  -Dnfse.producao.emitir=sim` é o teste — série `999`, numeração em
+  `nfse-test-sequence-producao.txt` (gitignored, nunca reinicia), cancelamento com rede de
+  segurança no `@AfterAll`, e o convênio só é impresso — não barra o envio. Em 04/11/2026 a receita da Comaho foi gerada, assinada com o
+  certificado dela e conferida localmente (XSD de fevereiro, assinatura íntegra, sem prefixo). As
+  regras de negócio de fevereiro não foram relidas — o `ANEXO_I` em `doc/anexos/` é o de 20/10.
+- `NfseDecisaoJudicialBuilder` só gera NT 009. Depois de 01/12/2026, `FEVEREIRO_2026`, o conversor e
+  a pasta `fevereiro-2026/` podem sair.
+
 O `xjc` recebe **só os schemas raiz** (`DPS`, `NFSe`, `evento`, `pedRegEvento`); os `tipos*` entram
 via `xs:include` (mesmo targetNamespace). Listá-los explicitamente causa erro de definição
 duplicada. `CNC_v1.00.xsd` fica de fora: é o leiaute de upload usado por municípios.
@@ -748,7 +797,7 @@ Xerces falha de forma intermitente quando o módulo de schemas entra como jar.
 Java 21 e Maven 3.8+ (o Maven local já roda em 21 por padrão).
 
 ```bash
-mvn clean install              # build completo (198 testes), instala em ~/.m2
+mvn clean install              # build completo (209 testes), instala em ~/.m2
 TZ=UTC mvn clean install       # o servidor roda em UTC; rode assim antes de um deploy
 mvn clean install -DskipTests  # só empacota
 mvn clean compile              # regenera o JAXB do nfse-nacional-schemas
@@ -780,6 +829,7 @@ mvn test -pl nfse-nacional-service -DfailIfNoTests=false \
 | `EmitirNfseIT` | Emissão pela fachada, com a DPS montada pelo `DpsBuilder` |
 | `EmitirECancelarNfseIT` | Emitir → imprimir o XML → cancelar, com a DPS espelhando uma NFS-e real |
 | `NfseServicosIT` | Ciclo ordenado: emitir → consultar por chave → consultar por DPS → cancelar |
+| `ComahoEmiteParaMcamasIT` | Receita da Comaho → MCamas, R$ 1,00: emitir → consultar → cancelar → evento → `CANCELADA` no ADN. Produção restrita é a regressão; **em produção emite nota real** e só roda com `-Dnfse.producao.emitir=sim` |
 
 `CertificadoDeTeste` resolve a credencial: usa `-Dnfse.cert.p12`/`-Dnfse.cert.senha` quando
 informados; senão varre `certificado/` (gitignored) e **abre cada candidato** com o `senha.txt`

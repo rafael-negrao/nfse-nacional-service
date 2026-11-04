@@ -25,6 +25,8 @@ infraestrutura/**/*_vars_file.yml
 
 # Sequência de numeração das DPS dos testes de integração — estado local de execução.
 nfse-test-sequence.txt
+# A de produção nunca reinicia: perdê-la faz repetir nDPS, que a Sefin recusa. Guarde-a.
+nfse-test-sequence-producao.txt
 
 # Notas fiscais reais (XML/PDF) baixadas para análise — dados de contribuintes, nunca no repositório.
 arquivos/

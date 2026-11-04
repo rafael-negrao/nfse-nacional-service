@@ -846,9 +846,22 @@ public final class DpsBuilder {
         return DataHoraFiscal.formatar(dhEmissao);
     }
 
-    /** XML da DPS, não assinado, pronto para {@code NfseService.emitir}. */
+    /** XML da DPS no leiaute da NT 009, não assinado, pronto para {@code NfseService.emitir}. */
     public String build() {
         return serializar(buildJaxb());
+    }
+
+    /**
+     * XML da DPS no leiaute indicado, não assinado. Produção aceita o de fevereiro/2026 até
+     * 30/11/2026 — use {@link LeiauteDps#vigente} para não fixar a data no chamador.
+     *
+     * @throws IllegalStateException se a DPS usa grupo sem equivalente no leiaute pedido, ou não
+     *                               valida no XSD dele
+     */
+    public String build(LeiauteDps leiaute) {
+        if (leiaute == null) throw new IllegalArgumentException("leiaute é obrigatório");
+        String xml = build();
+        return leiaute == LeiauteDps.FEVEREIRO_2026 ? ConversorLeiauteFevereiro2026.converter(xml) : xml;
     }
 
     private TCDPS montarDps() {

@@ -59,10 +59,23 @@ final class CertificadoDeTeste {
      * ({@code keystore password was incorrect}) não diz qual arquivo falhou.
      */
     static CertificadoDigital carregar(TipoAmbiente ambiente) throws Exception {
-        List<Path> candidatos = localizarP12();
+        return carregar(ambiente, DIRETORIO_CERTIFICADOS);
+    }
+
+    /**
+     * Como {@link #carregar(TipoAmbiente)}, mas só entre os certificados de
+     * {@code certificado/<empresa>/} — para o teste que precisa de um emitente específico, num
+     * diretório que guarda os de três empresas. {@code -Dnfse.cert.p12} continua prevalecendo.
+     */
+    static CertificadoDigital carregarDaEmpresa(TipoAmbiente ambiente, String empresa) throws Exception {
+        return carregar(ambiente, DIRETORIO_CERTIFICADOS.resolve(empresa));
+    }
+
+    private static CertificadoDigital carregar(TipoAmbiente ambiente, Path diretorio) throws Exception {
+        List<Path> candidatos = localizarP12(diretorio);
         assumeTrue(!candidatos.isEmpty(),
                 "Teste ignorado: nenhum certificado encontrado. Informe -Dnfse.cert.p12 e "
-                        + "-Dnfse.cert.senha, ou coloque um .pfx em " + DIRETORIO_CERTIFICADOS);
+                        + "-Dnfse.cert.senha, ou coloque um .pfx em " + diretorio);
 
         List<String> recusados = new ArrayList<>();
         for (Path caminho : candidatos) {
@@ -74,6 +87,13 @@ final class CertificadoDeTeste {
             byte[] bytes = Files.readAllBytes(caminho);
             if (!abre(bytes, senha.get())) {
                 recusados.add(caminho.getFileName() + ": a senha disponível não abre o arquivo");
+                continue;
+            }
+            // Renovado o certificado, o vencido fica na pasta ao lado do novo e abre com a mesma
+            // senha; escolhido, ele só falharia no handshake, com um erro que não diz isso.
+            Optional<String> vencido = vencido(bytes, senha.get());
+            if (vencido.isPresent()) {
+                recusados.add(caminho.getFileName() + ": vencido em " + vencido.get());
                 continue;
             }
 
@@ -100,6 +120,21 @@ final class CertificadoDeTeste {
         }
     }
 
+    /** Data de vencimento quando o certificado do PKCS#12 já venceu; vazio se ainda vale. */
+    private static Optional<String> vencido(byte[] p12, char[] senha) {
+        try {
+            KeyStore ks = KeyStore.getInstance("PKCS12");
+            ks.load(new java.io.ByteArrayInputStream(p12), senha);
+            java.security.cert.X509Certificate cert =
+                    (java.security.cert.X509Certificate) ks.getCertificate(ks.aliases().nextElement());
+            return cert.getNotAfter().before(new java.util.Date())
+                    ? Optional.of(cert.getNotAfter().toString())
+                    : Optional.empty();
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
+
     /** CNPJ ou CPF do titular do certificado; {@code -Dnfse.cnpj.emitente} sobrescreve. */
     static String inscricaoFederalDoCertificado(CertificadoDigital certificado) throws Exception {
         String informado = System.getProperty("nfse.cnpj.emitente");
@@ -123,16 +158,16 @@ final class CertificadoDeTeste {
     }
 
     /** Todos os certificados candidatos, em ordem estável. */
-    private static List<Path> localizarP12() throws Exception {
+    private static List<Path> localizarP12(Path diretorio) throws Exception {
         String informado = System.getProperty("nfse.cert.p12");
         if (informado != null && !informado.isBlank()) {
             Path caminho = Paths.get(informado);
             return Files.exists(caminho) ? List.of(caminho) : List.of();
         }
-        if (!Files.isDirectory(DIRETORIO_CERTIFICADOS)) {
+        if (!Files.isDirectory(diretorio)) {
             return List.of();
         }
-        try (Stream<Path> arquivos = Files.walk(DIRETORIO_CERTIFICADOS)) {
+        try (Stream<Path> arquivos = Files.walk(diretorio)) {
             return arquivos
                     .filter(Files::isRegularFile)
                     .filter(p -> {

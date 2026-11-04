@@ -78,26 +78,30 @@ GroupId `br.com.adelfo.nfse.nacional`, versão `1.0.0`. Pacote-raiz idem.
 | Manifestação | implementado, sem resposta da Sefin | idem |
 | DANFSe | validado com notas reais | **validado** com 11 notas reais da Comaho |
 
-**Emissão em produção está bloqueada por dois motivos, nenhum deles de código:**
+**Emissão em produção dependia de duas coisas; a primeira a biblioteca já resolve:**
 
-1. **Leiaute.** A biblioteca compila o leiaute da **NT 009/2026**, que produção restrita já exige
-   e **produção só passa a exigir em 01/12/2026**. Até lá, produção recusa a DPS com `E1235`
-   (falha de schema).
-2. **Cadastro em São Paulo.** Os três CNPJs disponíveis (Adelfo, Comaho, MCamas) são de São
-   Paulo, que ainda não migrou os contribuintes para o Emissor Nacional em produção — a emissão
-   volta `E0084`/`E0120`. Hoje as notas dessas empresas são emitidas pelo sistema da Prefeitura e
-   replicadas ao ADN, de onde a biblioteca as **consulta e imprime** normalmente.
+1. **Leiaute.** Produção valida o leiaute de **fevereiro/2026** (NT 004 v2.0) até 30/11/2026 e o da
+   **NT 009** a partir de 01/12/2026; produção restrita já está na NT 009. Desde 04/11/2026 a
+   biblioteca gera os dois — `dps.build(LeiauteDps.vigente(ambiente, LocalDate.now()))` escolhe
+   pela data. O de fevereiro foi **aceito pela Sefin de produção em 04/11/2026** (ver seção 7,
+   "Leiaute").
+2. **Cadastro em São Paulo.** Até outubro de 2026 São Paulo não tinha migrado os contribuintes
+   para o Emissor Nacional em produção, e a emissão voltava `E0084`/`E0120`. **Em 04/11/2026 a
+   Comaho emitiu e cancelou em produção pela biblioteca** — ver abaixo. As notas antigas, emitidas
+   pelo sistema da Prefeitura e replicadas ao ADN, a biblioteca **consulta e imprime** normalmente.
 
 **Optantes do Simples de São Paulo (Comaho, Adelfo) são obrigados a emitir pelo Emissor Nacional a
 partir de 01/11/2026** — Resolução CGSN nº 191/2026, confirmada pela Prefeitura em 19/10/2026. O
 sistema municipal fica só para consulta e para emissão retroativa de fatos geradores até
-31/10/2026. Em 28/10/2026 o convênio de SP em produção ainda respondia situação `0`.
+31/10/2026. Em 28/10 e em **04/11/2026** o convênio de SP em produção respondia situação `0` — e
+mesmo assim, em 04/11, a Comaho emitiu em produção: **o convênio não acompanha a migração**.
 
-> **Lacuna de novembro de 2026.** De 01/11 a 30/11 a emissão é obrigatória pelo Emissor Nacional,
-> mas produção ainda valida o leiaute da NT 004 v2.0 — e a biblioteca só gera o da NT 009. A DPS do
-> perfil Comaho (seção 9), validada contra o pacote anterior em 28/10/2026, é recusada
-> (`finNFSe` na raiz e posição do `cNBS`): seria `E1235`. **Nesse mês, emita pelo Emissor Nacional
-> web** (ou adapte a biblioteca — decisão do usuário). A partir de 01/12/2026 a biblioteca vale.
+> **Novembro de 2026.** De 01/11 a 30/11 a emissão é obrigatória pelo Emissor Nacional, e produção
+> ainda valida o leiaute de fevereiro. Gere a DPS com `build(LeiauteDps.FEVEREIRO_2026)` (ou
+> `vigente(...)`, que dá o mesmo resultado em produção até 30/11). Não há ambiente de teste para
+> esse leiaute — produção restrita já está na NT 009. Em 04/11/2026 a receita da Comaho (seção 9)
+> passou na Sefin de produção nesse leiaute (`nNFSe 2`, cancelada em seguida), **sem** IM do
+> prestador, endereço do tomador nem `piscofins` — campos que o Emissor Web acrescenta.
 
 Para saber se o município já aceita, consulte o convênio (seção 14).
 
@@ -188,8 +192,11 @@ cancelamento é um **evento** separado. Para saber se uma nota está cancelada, 
 depois do processamento na Sefin. Logo após emitir ou cancelar, `consultarSituacao` pode responder
 `NAO_ENCONTRADA` ou `VALIDA`. Para confirmar a operação que você acabou de fazer, use o retorno
 dela; para conferir depois, `consultarEvento(ConsultaEventoRequest.cancelamento(...))` consulta a
-**Sefin**, que registra o evento na hora. Não trate `VALIDA` no ADN como prova de que o
-cancelamento falhou.
+**Sefin**. Em produção restrita o evento consta na hora; **em produção (04/11/2026) a consulta logo
+após o cancelamento voltou vazia, e 4 min depois devolveu o evento** — repita antes de concluir.
+Enquanto a nota não chega, o ADN de produção responde 404 com `E2241` ("não referencia o
+Contribuinte solicitante"), que `consultarSituacao` entrega como `NAO_ENCONTRADA`. Não trate
+`VALIDA` nem `NAO_ENCONTRADA` no ADN como prova de que o cancelamento falhou.
 
 Em 28/10/2026 (produção restrita), duas notas da mesma empresa foram canceladas com minutos de
 diferença:
@@ -363,12 +370,58 @@ DpsBuilder dps = DpsBuilder.novo()
         .totalTributos(new BigDecimal("0.00"), new BigDecimal("0.00"), new BigDecimal("0.00"));
 
 String idDps  = dps.id();       // guarde ANTES de enviar — é a chave de idempotência
-String xmlDps = dps.build();    // XML não assinado; o builder já validou contra o XSD
+String xmlDps = dps.build();    // XML não assinado, NT 009; em produção até 30/11, ver "Leiaute" abaixo
 
 EmissaoResponse resp = nfse.emitir(new EmissaoRequest(TipoAmbiente.PRODUCAO_RESTRITA, xmlDps));
 String chave   = resp.chaveAcesso();   // 50 dígitos
 String xmlNfse = resp.xmlNfse();       // GUARDE: é o documento fiscal
 ```
+
+### Leiaute — qual versão de XML cada ambiente aceita
+
+Os dois pacotes de schema chamam-se `v1.01` e a DPS declara `versao="1.01"` nos dois: **o número da
+versão não diz qual leiaute o servidor espera**. Quem diz é a data e o ambiente:
+
+| `LeiauteDps` | Pacote | Aceito em |
+|---|---|---|
+| `FEVEREIRO_2026` | `NFSe-ESQUEMAS_XSD-v1.01-20260209` (NT 004 v2.0) | produção, **até 30/11/2026** |
+| `NT009_OUTUBRO_2026` | `NFSe-ESQUEMAS_XSD-PRODREST-v1.01-20261020` | produção restrita (desde ~21/10); produção **a partir de 01/12/2026** |
+
+```java
+LeiauteDps leiaute = LeiauteDps.vigente(ambiente, LocalDate.now());  // a troca de 01/12 fica na biblioteca
+String xmlDps = dps.build(leiaute);
+// build() sem argumento = NT009_OUTUBRO_2026
+```
+
+`vigente` devolve `FEVEREIRO_2026` só para `PRODUCAO` antes de `LeiauteDps.INICIO_NT009_EM_PRODUCAO`
+(01/12/2026). A data já mudou uma vez; se mudar de novo, é uma constante.
+
+**Como o leiaute de fevereiro é gerado.** A DPS é montada na NT 009 e convertida antes da
+assinatura. Na DPS sem ajuste de base de cálculo e sem imóvel — o perfil da Comaho —, a diferença é
+de posição: `finNFSe` sai da raiz (vai para dentro do `IBSCBS`, ou some se não houver o grupo),
+`cNBS`/`cIntContrib` passam para depois de `xDescServ`, e `CST`/`cClassTrib` descem para
+`IBSCBS/valores/trib/gIBSCBS`. O XML convertido é **validado contra o XSD de fevereiro** em todo
+`build`; o que não couber lança `IllegalStateException` citando `E1235`, em vez de virar rejeição em
+produção.
+
+Recusado em `FEVEREIRO_2026`, por não ter equivalente direto:
+
+| Na NT 009 | Em fevereiro |
+|---|---|
+| `documentoAjusteBC(...)`, `deducaoPercentual`/`deducaoValor` (`vAjusteBC`) | eram `vDedRed`/`gReeRepRes`, com outros códigos de tipo |
+| `IbsCbsBuilder.imovel(...)` | estrutura refeita pela NT 009 |
+| bens móveis no IBS/CBS | grupo não existia |
+| `IbsCbsBuilder` sem `codigoIndicadorOperacao` | `cIndOp` era obrigatório |
+| `tomadorCpf(cpf, null)` / `tomadorCnpj(cnpj, null)` | `xNome` era obrigatório (o XSD barra) |
+| CNPJ com letras | só dígitos (o XSD barra) |
+
+**O que está e o que não está garantido.** Em 04/11/2026 a receita da Comaho (seção 9) foi gerada em
+`FEVEREIRO_2026`, assinada com o certificado dela e conferida localmente: válida no XSD de
+fevereiro, assinatura íntegra, sem prefixo de namespace. **Não foi enviada à Sefin** — produção
+restrita não aceita esse leiaute e produção emitiria uma nota de verdade. As regras de negócio
+daquela versão também não foram relidas: o `ANEXO_I` em `doc/anexos/` é o de 20/10/2026. O
+cancelamento não muda de um leiaute para o outro. A emissão por decisão judicial
+(`NfseDecisaoJudicialBuilder`) só gera a NT 009.
 
 Não optante do Simples, com alíquota:
 
@@ -449,7 +502,8 @@ chamada**, com o nome do método e o código da regra.
 | `emitidaPeloTomador(motivo)` / `emitidaPeloIntermediario(motivo)` | `tpEmit=2/3` | existem no leiaute; **a Sefin recusa com `E9996`** |
 | `substitui(chave, motivo, descricao)` | `subst` | ver seção 12 |
 | `id()` | — | Id da DPS (45 posições); disponível antes de `build()` |
-| `build()` | — | XML não assinado, validado |
+| `build()` | — | XML não assinado, leiaute da NT 009 |
+| `build(LeiauteDps)` | — | XML não assinado no leiaute pedido; `FEVEREIRO_2026` é validado contra o XSD de fevereiro (seção 7) |
 
 `finNFSe` (finalidade) é preenchido automaticamente como `0` (NFS-e regular).
 
@@ -945,7 +999,7 @@ Emita uma nova DPS apontando a chave da nota a substituir. A Sefin cancela a ori
 DpsBuilder nova = DpsBuilder.novo()
         /* ... tudo como numa emissão normal, com NOVO número de DPS ... */
         .substitui(chaveOriginal, "99", "Correção do valor do serviço prestado");
-nfse.emitir(new EmissaoRequest(ambiente, nova.build()));
+nfse.emitir(new EmissaoRequest(ambiente, nova.build(LeiauteDps.vigente(ambiente, LocalDate.now()))));
 ```
 
 Motivos: `01` desenquadramento do SN, `02` enquadramento no SN, `03` inclusão retroativa de
@@ -984,8 +1038,9 @@ c.contribuintesEmitemPeloPadraoNacional();   // USE ESTE
 c.aderenteEmissorNacional();                 // NÃO basta: SP responde true e recusa toda emissão
 ```
 
-`contribuintesEmitemPeloPadraoNacional()` é uma indicação barata (pré-voo). A confirmação
-definitiva é a tentativa de emissão.
+`contribuintesEmitemPeloPadraoNacional()` é uma indicação, **não use para bloquear a emissão**:
+em 04/11/2026 São Paulo respondia `false` (situação `0`) em produção, e a Comaho emitiu. A
+confirmação definitiva é a tentativa de emissão.
 
 ### Demais consultas
 
@@ -1207,7 +1262,7 @@ Sefin valida tudo e devolve **todos** os apontamentos de uma vez — corrija tod
 
 | Código | Significado | O que fazer |
 |---|---|---|
-| `E1235` | XML fora do schema da Sefin | leiaute mudou (NT nova) ou produção ainda no leiaute antigo — atualizar a biblioteca |
+| `E1235` | XML fora do schema da Sefin | leiaute errado para o ambiente — use `build(LeiauteDps.vigente(...))`; se persistir, saiu NT nova: atualizar a biblioteca |
 | `E0084` | CNPJ sem estabelecimento no CNC do município | município não migrou o contribuinte; não é código |
 | `E0120` | IM informada sem dados complementares no CNC | retire `prestadorInscricaoMunicipal` |
 | `E0121`, `E0128`, `E0112` | nome/endereço/NIF do prestador com `tpEmit=1` | o builder já recusa |
@@ -1488,7 +1543,8 @@ public class NotaFiscalServicoService {
 
         Nota nota = repo.save(Nota.pendente(dps.id(), numero));   // grava ANTES de enviar
         try {
-            EmissaoResponse r = nfse.emitir(new EmissaoRequest(ambiente, dps.build()));
+            String xml = dps.build(LeiauteDps.vigente(ambiente, LocalDate.now()));
+            EmissaoResponse r = nfse.emitir(new EmissaoRequest(ambiente, xml));
             return repo.save(nota.autorizada(r.chaveAcesso(), r.xmlNfse()));
         } catch (NfseException e) {
             if (e.isServicoIndisponivel() || e.isLimiteDeRequisicoes()) {
@@ -1529,7 +1585,8 @@ Antes de emitir:
 - [ ] um dos `semTotalTributos`/`totalTributos*`;
 - [ ] tributação conforme o perfil do emitente (seção 9) — caso fora do perfil, perguntar antes;
 - [ ] competência ≤ hoje em Brasília (`DataHoraFiscal.hoje()`);
-- [ ] município aceita emissão (`consultarConvenio`) — São Paulo em produção ainda não.
+- [ ] leiaute pela data (`LeiauteDps.vigente`) — produção fica no de fevereiro até 30/11/2026;
+- [ ] o convênio (`consultarConvenio`) só explica um `E0084`; não barra — SP responde `0` e emite.
 
 Depois de emitir:
 
@@ -1559,6 +1616,6 @@ Armadilhas que já custaram tempo:
 | Data | O quê |
 |---|---|
 | ~30/10/2026 | próximo release da NT 009 em produção restrita (move `indDest`/`dest`) |
-| **01/11/2026** | optantes do Simples de São Paulo passam a emitir obrigatoriamente pelo Emissor Nacional (Resolução CGSN 191/2026) — mas produção ainda no leiaute antigo; ver seção 2 |
-| **01/12/2026** | produção passa a exigir o leiaute da NT 009 — a partir daí a biblioteca emite em produção (se o município aceitar) |
+| **01/11/2026** | optantes do Simples de São Paulo passam a emitir obrigatoriamente pelo Emissor Nacional (Resolução CGSN 191/2026) — produção no leiaute de fevereiro: `LeiauteDps.FEVEREIRO_2026` |
+| **01/12/2026** | produção passa a exigir o leiaute da NT 009 — `LeiauteDps.vigente` troca sozinho; confira se o pacote de produção é o mesmo compilado |
 

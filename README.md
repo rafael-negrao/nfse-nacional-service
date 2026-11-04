@@ -20,14 +20,13 @@ armadilhas já encontradas contra o ambiente real.
 | Emissão | **validada em produção restrita** (27/10/2026); em produção, ainda para no CNC de São Paulo |
 | Cancelamento | **validado em produção restrita**, inclusive a consulta do evento |
 | Manifestação | implementada e validada contra os XSDs oficiais, **ainda sem resposta da Sefin** |
-| Leiaute | **NT 009/2026** (pacote de 20/10/2026), que produção restrita já exige e produção passa a exigir em 01/12/2026 |
+| Leiaute | **NT 009/2026** (pacote de 20/10/2026), exigido por produção restrita e, a partir de 01/12/2026, por produção; e o de **fevereiro/2026**, que produção aceita até 30/11/2026 — `DpsBuilder.build(LeiauteDps)` escolhe |
 | DANFSE | **gerado localmente** pelo módulo opcional `nfse-nacional-danfse`, conforme a NT 008/2026 — a API nacional foi suspensa |
 
 O ciclo de escrita — emitir, consultar, cancelar e consultar o evento — está validado de ponta a
-ponta contra a Sefin de produção restrita. Em produção falta um passo administrativo: o
-**município emissor precisa ter o CNC NFS-e povoado** e o CNPJ precisa ter estabelecimento nele
-(`E0120`, `E0084`). Em 27/10/2026 São Paulo já atendia a isso em produção restrita, mas não em
-produção.
+ponta contra a Sefin de produção restrita e, desde 04/11/2026, **de produção**: a Comaho emitiu e
+cancelou uma nota em São Paulo no leiaute de fevereiro (`LeiauteDps.FEVEREIRO_2026`). O município
+emissor precisa ter migrado o contribuinte (`E0120`, `E0084` enquanto não migrou).
 
 ---
 
@@ -335,8 +334,11 @@ ambiente real — leitura recomendada antes de mexer no leiaute ou na assinatura
 
 ## Limitações conhecidas
 
-- **o leiaute compilado é o da NT 009/2026** (produção restrita, 20/10/2026). Produção só o exige a
-  partir de 01/12/2026; até lá, uma DPS desta versão seria recusada no schema em produção;
+- **o leiaute de fevereiro/2026** (`LeiauteDps.FEVEREIRO_2026`, produção até 30/11/2026) é gerado
+  por conversão da DPS da NT 009 e validado contra o XSD oficial. A Sefin de produção o aceitou em
+  04/11/2026 com a receita da Comaho; outros perfis não foram exercitados, e produção restrita já
+  não aceita esse leiaute. Ajuste de base de cálculo e imóvel no IBS/CBS não têm equivalente nele e
+  são recusados no `build`;
 - **CNPJ alfanumérico** é aceito, como manda o schema da NT 009. O DV da *chave de acesso* com letras
   segue a regra da NF-e por analogia e não foi conferido contra uma chave real;
 - as três rotas de alíquota do ADN respondem 400 para qualquer código de serviço, inclusive códigos
