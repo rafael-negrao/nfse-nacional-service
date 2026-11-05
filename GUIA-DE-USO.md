@@ -188,9 +188,9 @@ notas não têm validade jurídica. O ambiente do request precisa ser o mesmo do
 cancelamento é um **evento** separado. Para saber se uma nota está cancelada, use
 `consultarSituacao` — **nunca** o `cStat` da consulta por chave.
 
-**O ADN atrasa — em produção restrita ~30 s; em produção, de minutos a quase uma hora** (em
-04/11/2026 uma nota emitida e cancelada às 18:51 ainda não estava no ADN às 18:56 e constava
-`CANCELADA` às 19:43; o cancelamento de outra, às 19:41, ainda não tinha chegado às 19:44). Notas e eventos chegam ao ADN
+**O ADN atrasa — em produção restrita ~30 s; em produção, de minutos a horas** (em 04/11/2026
+uma nota emitida e cancelada às 18:51 ainda não estava no ADN às 18:56 e constava `CANCELADA` às
+19:43; o cancelamento de outra, às 19:41, ainda não tinha chegado às 19:44 e constava às 22:11). Notas e eventos chegam ao ADN
 depois do processamento na Sefin. Logo após emitir ou cancelar, `consultarSituacao` pode responder
 `NAO_ENCONTRADA` ou `VALIDA`. Para confirmar a operação que você acabou de fazer, use o retorno
 dela; para conferir depois, `consultarEvento(ConsultaEventoRequest.cancelamento(...))` consulta a

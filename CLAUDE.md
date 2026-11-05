@@ -408,7 +408,7 @@ confirmação imediata; o ADN é eventual, com atraso que pode passar de uma hor
 |---|---|---|---|
 | `…0226110237017444` (biblioteca) — emissão e cancelamento | 18:51:52 | 18:56 (nota inteira: 404 `E2241`) | até 19:43 (`CANCELADA`) |
 | `…0126110862237948` (Emissor Web) — emissão | 18:42 | — | até 18:56 |
-| `…0126110862237948` — cancelamento | 19:41:24 | 19:44 (`VALIDA`) | — |
+| `…0126110862237948` — cancelamento | 19:41:24 | 19:44 (`VALIDA`) | até 22:11 (`CANCELADA`) |
 
 Nem a Sefin responde na hora em produção: a consulta do evento voltou 404 por ~75 s depois do
 cancelamento da `…0126110862237948`, e logo após o da `…0226110237017444` (que às 18:56 já
