@@ -36,7 +36,11 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * A Comaho emite uma NFS-e de <b>R$ 1,00</b> para a MCamas e a cancela — o ciclo que ela vai usar de
- * verdade, nos dois ambientes:
+ * verdade, nos dois ambientes. Com {@code -Dnfse.prestador=mcamas} as partes se invertem: a MCamas
+ * emite para a Comaho. A receita é a mesma porque o perfil é o mesmo — as 71 notas que a MCamas
+ * emitiu pelo sistema da Prefeitura até 30/10/2026 são todas "manutenção em equipamento
+ * hospitalar", {@code 140101}/{@code 009}, e desde 15/07/2026 (nNFSe 11) no Simples, sem retenção,
+ * com 17,35% de tributos aproximados — a soma dos percentuais do IBPT abaixo:
  *
  * <ul>
  *   <li><b>produção restrita</b> (padrão): regressão. Leiaute da NT 009 e a receita do
@@ -59,8 +63,9 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *       ainda assim falhar, imprime a chave para cancelamento manual no Emissor Nacional.</li>
  * </ol>
  * Em produção a série é {@value #SERIE_PRODUCAO}, separada da que o sistema de verdade usar, e a
- * numeração tem arquivo próprio ({@code nfse-test-sequence-producao.txt}), que nunca reinicia: DPS
- * repetida é recusada, e em produção não há como "limpar" o histórico.
+ * numeração tem arquivo próprio por prestador ({@code nfse-test-sequence-producao.txt} para a Comaho,
+ * {@code nfse-test-sequence-producao-mcamas.txt} para a MCamas), que nunca reinicia: DPS repetida é
+ * recusada, e em produção não há como "limpar" o histórico.
  *
  * <p>O cancelamento em produção depende de parametrização municipal que não se consulta antes
  * ({@code E0822} prazo, {@code E0823} valor, {@code E0824} tomador) — é o risco que sobra.
@@ -74,19 +79,28 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * mvn test -pl nfse-nacional-service -DfailIfNoTests=false \
  *     -Dsurefire.failIfNoSpecifiedTests=false -Dtest=ComahoEmiteParaMcamasIT \
  *     -Dnfse.ambiente=producao -Dnfse.producao.emitir=sim
+ *
+ * # a MCamas emite para a Comaho (qualquer dos dois ambientes)
+ *     ... -Dnfse.prestador=mcamas
  * </pre>
  *
- * <p>O certificado sai de {@code certificado/comaho/} (o vencido é descartado), ou de
- * {@code -Dnfse.cert.p12}. Se não for da Comaho, o teste é pulado: o perfil tributário é o dela.
+ * <p>O certificado sai de {@code certificado/<prestador>/} (o vencido é descartado), ou de
+ * {@code -Dnfse.cert.p12}. Se não for do prestador escolhido, o teste é pulado.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ComahoEmiteParaMcamasIT {
 
-    private static final String CNPJ_COMAHO = "54559893000139";
+    /**
+     * Uma das duas partes. Do tomador vão só CNPJ e razão social — endereço é opcional no leiaute; do
+     * prestador, só o CNPJ ({@code E0121}/{@code E0128}). {@code pasta} é a de {@code certificado/}.
+     */
+    private record Parte(String pasta, String cnpj, String nome, String sequenciaProducao) {
+    }
 
-    /** Tomador: só CNPJ e razão social, do certificado da MCamas. Endereço é opcional no leiaute. */
-    private static final String CNPJ_MCAMAS = "37641093000143";
-    private static final String NOME_MCAMAS = "MCAMAS LOCACAO DE EQUIPAMENTOS HOSPITALARES LTDA";
+    private static final Parte COMAHO = new Parte("comaho", "54559893000139",
+            "COMAHO COMERCIO DE MATERIAIS HOSPITALARES LTDA", "nfse-test-sequence-producao.txt");
+    private static final Parte MCAMAS = new Parte("mcamas", "37641093000143",
+            "MCAMAS LOCACAO DE EQUIPAMENTOS HOSPITALARES LTDA", "nfse-test-sequence-producao-mcamas.txt");
 
     private static final String MUNICIPIO_SP = "3550308";
     private static final BigDecimal VALOR = new BigDecimal("1.00");
@@ -106,8 +120,6 @@ class ComahoEmiteParaMcamasIT {
 
     /** Série só dos testes em produção, para não disputar numeração com o emissor de verdade. */
     static final String SERIE_PRODUCAO = "999";
-    private static final Path SEQUENCIA_PRODUCAO =
-            Paths.get("nfse-test-sequence-producao.txt").toAbsolutePath();
 
     /** Pré-requisitos de cadastro: o documento está certo, quem não está habilitado é o CNPJ ou o município. */
     private static final Set<String> PRE_REQUISITOS_CADASTRAIS = Set.of("E0037", "E0084", "E0120");
@@ -117,6 +129,8 @@ class ComahoEmiteParaMcamasIT {
     private static final Duration INTERVALO_ADN = Duration.ofSeconds(30);
 
     private static TipoAmbiente ambiente;
+    private static Parte prestador;
+    private static Parte tomador;
     private static LeiauteDps leiaute;
     private static NfseService service;
     private static NfseHttpClient httpClient;
@@ -132,18 +146,29 @@ class ComahoEmiteParaMcamasIT {
     static void setup() throws Exception {
         ambiente = CertificadoDeTeste.ambiente();
         leiaute = LeiauteDps.vigente(ambiente, DataHoraFiscal.hoje());
+        String escolhido = System.getProperty("nfse.prestador", COMAHO.pasta());
+        if (MCAMAS.pasta().equalsIgnoreCase(escolhido)) {
+            prestador = MCAMAS;
+            tomador = COMAHO;
+        } else if (COMAHO.pasta().equalsIgnoreCase(escolhido)) {
+            prestador = COMAHO;
+            tomador = MCAMAS;
+        } else {
+            throw new IllegalArgumentException("-Dnfse.prestador deve ser comaho ou mcamas: " + escolhido);
+        }
 
-        CertificadoDigital certificado = CertificadoDeTeste.carregarDaEmpresa(ambiente, "comaho");
+        CertificadoDigital certificado = CertificadoDeTeste.carregarDaEmpresa(ambiente, prestador.pasta());
         String emitente = certificado.inscricaoFederal();
-        assumeTrue(CNPJ_COMAHO.equals(emitente),
-                "Teste ignorado: o certificado é de " + emitente + ", e o perfil deste teste é o da Comaho");
+        assumeTrue(prestador.cnpj().equals(emitente),
+                "Teste ignorado: o certificado é de " + emitente + ", e o prestador escolhido é " + prestador.nome());
 
         httpClient = new NfseHttpClient(certificado, Duration.ofSeconds(15), Duration.ofSeconds(60));
         service = new NfseServiceImpl(certificado, httpClient);
 
         System.out.println("[setup] Ambiente : " + ambiente + " (tpAmb=" + ambiente.getCodigo() + ")");
         System.out.println("[setup] Leiaute  : " + leiaute);
-        System.out.println("[setup] Prestador: " + CNPJ_COMAHO + " (Comaho) → tomador " + CNPJ_MCAMAS + " (MCamas)");
+        System.out.println("[setup] Prestador: " + prestador.cnpj() + " (" + prestador.nome() + ")");
+        System.out.println("[setup] Tomador  : " + tomador.cnpj() + " (" + tomador.nome() + ")");
 
         if (ambiente == TipoAmbiente.PRODUCAO) {
             System.out.println("[setup] *** PRODUÇÃO: a emissão gera um documento fiscal real ***");
@@ -172,17 +197,17 @@ class ComahoEmiteParaMcamasIT {
         }
     }
 
-    /** A receita da Comaho do GUIA-DE-USO, seção 9, com a MCamas de tomador. */
+    /** A receita do GUIA-DE-USO, seção 9 — a mesma para as duas empresas. */
     private static DpsBuilder dps(String serie, String numero) {
         return DpsBuilder.novo()
                 .ambiente(ambiente)
                 .municipioEmissor(MUNICIPIO_SP)
                 .identificacao(serie, numero, DataHoraFiscal.hoje())
                 .emitidaPeloPrestador()
-                .prestadorCnpj(CNPJ_COMAHO)
+                .prestadorCnpj(prestador.cnpj())
                 .optanteSimplesNacionalMeEpp("1")
                 .semRegimeEspecial()
-                .tomadorCnpj(CNPJ_MCAMAS, NOME_MCAMAS)
+                .tomadorCnpj(tomador.cnpj(), tomador.nome())
                 .servicoPrestadoNoMunicipio(MUNICIPIO_SP)
                 .servico("140101", DESCRICAO)
                 .codigoTributacaoMunicipal("009")
@@ -200,15 +225,19 @@ class ComahoEmiteParaMcamasIT {
                 : DpsDeTeste.serie();
     }
 
-    /** Produção: sequência própria, a partir de 1 e sem reinício. Produção restrita: a de sempre. */
+    /**
+     * Produção: sequência própria do prestador, a partir de 1 e sem reinício — o Id da DPS leva o CNPJ,
+     * então cada um numera a sua série 999. Produção restrita: a de sempre.
+     */
     private static String proximoNumero() throws Exception {
         if (ambiente != TipoAmbiente.PRODUCAO) {
             return DpsDeTeste.proximoNumeroDps();
         }
-        long atual = Files.exists(SEQUENCIA_PRODUCAO)
-                ? Long.parseLong(Files.readString(SEQUENCIA_PRODUCAO).trim())
+        Path sequencia = Paths.get(prestador.sequenciaProducao()).toAbsolutePath();
+        long atual = Files.exists(sequencia)
+                ? Long.parseLong(Files.readString(sequencia).trim())
                 : 1;
-        Files.writeString(SEQUENCIA_PRODUCAO, (atual + 1) + System.lineSeparator());
+        Files.writeString(sequencia, (atual + 1) + System.lineSeparator());
         System.out.println("[sequencia] produção, série " + serie() + ", nDPS " + atual);
         return String.valueOf(atual);
     }
@@ -248,7 +277,7 @@ class ComahoEmiteParaMcamasIT {
         System.out.println(xmlNfse);
 
         assertTrue(chaveAcesso.matches("[0-9]{50}"), "chave fora do formato: " + chaveAcesso);
-        assertTrue(chaveAcesso.substring(9, 23).equals(CNPJ_COMAHO), "a chave deve trazer o CNPJ da Comaho");
+        assertTrue(chaveAcesso.substring(9, 23).equals(prestador.cnpj()), "a chave deve trazer o CNPJ do prestador");
         assertTrue(xmlNfse.contains("<tpAmb>" + ambiente.getCodigo() + "</tpAmb>"),
                 "a nota deve ter sido gerada em " + ambiente);
     }
@@ -264,7 +293,7 @@ class ComahoEmiteParaMcamasIT {
         assertNotNull(xml, "a consulta por chave deve devolver o XML da NFS-e");
         assertTrue(xml.contains(chaveAcesso), "o XML deve trazer a chave emitida");
         assertTrue(xml.contains("<vServ>1.00</vServ>"), "o valor do serviço deve ser 1.00");
-        assertTrue(xml.contains("<CNPJ>" + CNPJ_MCAMAS + "</CNPJ>"), "a MCamas deve ser o tomador");
+        assertTrue(xml.contains("<CNPJ>" + tomador.cnpj() + "</CNPJ>"), tomador.nome() + " deve ser o tomador");
         assertTrue(xml.contains("<cTribNac>140101</cTribNac>"), "o serviço deve ser o 14.01.01");
         assertTrue(xml.contains("<pTotTribFed>13.45</pTotTribFed>"), "os percentuais do IBPT devem constar");
     }

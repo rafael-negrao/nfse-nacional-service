@@ -29,15 +29,17 @@ sistema da Prefeitura (Simples, `cTribNac 140101`, `cTribMun 009`, tomador pesso
 endereço): emitida na primeira tentativa (`…0126101339161070`), cancelada e lida como `CANCELADA`
 no ADN. O perfil está em `GUIA-DE-USO.md`, seção 9.
 
-**Em 04/11/2026 a MCamas emitiu como prestadora** (produção restrita, certificado renovado, válido até
-10/08/2027): `EmitirECancelarNfseIT` com `-Dnfse.cert.p12` apontando para o dela — 4 de 4, nota
-`…0126115476290307`, cancelada; a Comaho foi a tomadora. O `emit` veio com o endereço do cadastro
-dela, então ela está no CNC de São Paulo em produção restrita. **O perfil tributário não é o dela**:
-não há nota emitida pela MCamas, e o IT usa o da Adelfo (Simples, `010401`/`001`). Locação de bens
-móveis não é serviço tributável pelo ISS (Súmula Vinculante 31; item 3.01 da LC 116 vetado), então
-antes de levá-la a produção é preciso saber que serviço ela fatura. A pasta `certificado/mcamas/`
-guarda o vencido e o novo; `CertificadoDeTeste` descarta o vencido e usa a senha
-`<nome>.senha.txt`.
+**Em 04/11/2026 a MCamas emitiu como prestadora, em produção restrita e em produção.** Certificado
+renovado, válido até 10/08/2027; `certificado/mcamas/` guarda o vencido e o novo, e
+`CertificadoDeTeste` descarta o vencido e usa a senha `<nome>.senha.txt`. A distribuição do ADN de
+produção trouxe as 71 notas que ela emitiu pelo sistema da Prefeitura: apesar da razão social
+("locação"), todas "manutenção em equipamento hospitalar", `140101`/`009`, no Simples desde a nNFSe 11
+(15/07/2026; antes, não optante com alíquota de 5%) — **o perfil da Comaho**. O
+`ComahoEmiteParaMcamasIT` ganhou `-Dnfse.prestador=mcamas`, que inverte as partes, e passou 5 de 5 em
+produção restrita (`…0226116605831076`) e **em produção** (`…0126115680075753`, nNFSe 1, série `999`
+nº 1, leiaute de fevereiro), cancelada e lida como `CANCELADA` no ADN em ~30 s. Antes disso, um
+`EmitirECancelarNfseIT` com o certificado dela (perfil da Adelfo, `010401`) também passara em
+produção restrita. Perfil em `GUIA-DE-USO.md`, seção 9.
 
 Três coisas tiveram de mudar para chegar lá, nesta ordem — cada uma só apareceu depois que a
 anterior foi resolvida:
@@ -384,6 +386,13 @@ notas sem conhecer a chave, o mecanismo é a **distribuição incremental por NS
 guarda-se o último NSU processado e pede-se o próximo lote. Filtrar por data é trabalho do
 chamador, sobre o que a varredura trouxer. Ver `NfseService.consultarDFe` e o padrão em
 `ConsultaDFeResponse`.
+
+**`cnpjConsulta` vai sempre.** Sem ele, o ADN de produção tenta a consulta pela inscrição do
+certificado (`"TipoConsulta":"InscricaoCertificado"`) e, para a MCamas, respondeu 400 `REJEICAO` com
+`Erros` **vazio** — nenhum código para procurar. Com o CNPJ explícito a mesma chamada vira
+`"CnpjBase"` e devolve os lotes. Com Adelfo e Comaho o parâmetro omitido funcionava, e foi isso que
+escondeu o defeito até 04/11/2026. `NfseServiceImpl.urlDistribuicao` usa o CNPJ do pedido ou, sem
+ele, o do certificado (certificado de CPF segue sem o parâmetro); `UrlDistribuicaoTest` fixa isso.
 
 Comportamento confirmado em produção: o ADN devolve os documentos **posteriores** ao NSU informado,
 em ordem crescente e sem sobreposição entre lotes; `StatusProcessamento` vira
@@ -820,7 +829,7 @@ Xerces falha de forma intermitente quando o módulo de schemas entra como jar.
 Java 21 e Maven 3.8+ (o Maven local já roda em 21 por padrão).
 
 ```bash
-mvn clean install              # build completo (209 testes), instala em ~/.m2
+mvn clean install              # build completo (213 testes), instala em ~/.m2
 TZ=UTC mvn clean install       # o servidor roda em UTC; rode assim antes de um deploy
 mvn clean install -DskipTests  # só empacota
 mvn clean compile              # regenera o JAXB do nfse-nacional-schemas
@@ -852,7 +861,7 @@ mvn test -pl nfse-nacional-service -DfailIfNoTests=false \
 | `EmitirNfseIT` | Emissão pela fachada, com a DPS montada pelo `DpsBuilder` |
 | `EmitirECancelarNfseIT` | Emitir → imprimir o XML → cancelar, com a DPS espelhando uma NFS-e real |
 | `NfseServicosIT` | Ciclo ordenado: emitir → consultar por chave → consultar por DPS → cancelar |
-| `ComahoEmiteParaMcamasIT` | Receita da Comaho → MCamas, R$ 1,00: emitir → consultar → cancelar → evento → `CANCELADA` no ADN. Produção restrita é a regressão; **em produção emite nota real** e só roda com `-Dnfse.producao.emitir=sim` |
+| `ComahoEmiteParaMcamasIT` | Receita da Comaho → MCamas, R$ 1,00 (`-Dnfse.prestador=mcamas` inverte): emitir → consultar → cancelar → evento → `CANCELADA` no ADN. Produção restrita é a regressão; **em produção emite nota real** e só roda com `-Dnfse.producao.emitir=sim` |
 
 `CertificadoDeTeste` resolve a credencial: usa `-Dnfse.cert.p12`/`-Dnfse.cert.senha` quando
 informados; senão varre `certificado/` (gitignored) e **abre cada candidato** com o `senha.txt`

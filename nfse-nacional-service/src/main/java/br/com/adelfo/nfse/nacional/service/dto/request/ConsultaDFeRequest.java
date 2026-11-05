@@ -14,8 +14,9 @@ import br.com.adelfo.nfse.nacional.client.TipoAmbiente;
  * @param nsu          último NSU já processado; o ADN devolve os documentos <b>posteriores</b> a ele.
  *                     Comece em {@code 0} para varrer desde o início
  * @param cnpjConsulta CNPJ a consultar, quando diferente do titular do certificado; precisa ter a
- *                     mesma <b>raiz</b> — útil para a matriz varrer filiais. {@code null} usa o
- *                     próprio certificado
+ *                     mesma <b>raiz</b> — útil para a matriz varrer filiais. {@code null} usa o CNPJ
+ *                     do próprio certificado, enviado explicitamente: sem o parâmetro o ADN de
+ *                     produção recusa alguns contribuintes
  * @param lote         pede o retorno em lote em vez de um documento por vez
  */
 public record ConsultaDFeRequest(TipoAmbiente ambiente, long nsu, String cnpjConsulta, boolean lote) {

@@ -221,20 +221,9 @@ public class NfseServiceImpl implements NfseService {
 
     @Override
     public ConsultaDFeResponse consultarDFe(ConsultaDFeRequest request) {
-        StringBuilder url = new StringBuilder(request.ambiente().getUrlAdn())
-                .append("/contribuintes/DFe/").append(request.nsu());
-        String separador = "?";
-        if (request.lote()) {
-            url.append(separador).append("lote=true");
-            separador = "&";
-        }
-        if (request.cnpjConsulta() != null && !request.cnpjConsulta().isBlank()) {
-            url.append(separador).append("cnpjConsulta=").append(encode(request.cnpjConsulta()));
-        }
-
         JsonNode resposta;
         try {
-            resposta = lerJson(httpClient.get(url.toString()));
+            resposta = lerJson(httpClient.get(urlDistribuicao(request, cnpjDoCertificado())));
         } catch (NfseHttpException e) {
             // 404 aqui é "não há documentos após este NSU" — fim da varredura, não falha.
             if (e.getStatus() == 404) {
@@ -330,6 +319,41 @@ public class NfseServiceImpl implements NfseService {
         ObjectNode corpo = objectMapper.createObjectNode();
         corpo.put(CAMPO_EVENTO_ENVIO, GZipBase64.comprimir(xmlAssinado));
         return postJson(url(ambiente, "/nfse/" + encode(chaveAcesso) + "/eventos"), corpo);
+    }
+
+    /**
+     * {@code cnpjConsulta} sempre vai na URL — o do pedido ou, sem ele, o do certificado. Sem o
+     * parâmetro o ADN de produção tenta a consulta pela "inscrição do certificado" e, para alguns
+     * contribuintes, responde 400 {@code {"TipoConsulta":"InscricaoCertificado","StatusProcessamento":
+     * "REJEICAO","Erros":[]}} — sem código nem descrição. Com o CNPJ explícito a mesma chamada passa a
+     * {@code "TipoConsulta":"CnpjBase"} e devolve os documentos. Visto em 04/11/2026 com o certificado
+     * da MCamas; o da Adelfo funcionava sem o parâmetro, o que escondeu o problema.
+     */
+    static String urlDistribuicao(ConsultaDFeRequest request, String cnpjDoCertificado) {
+        StringBuilder url = new StringBuilder(request.ambiente().getUrlAdn())
+                .append("/contribuintes/DFe/").append(request.nsu());
+        String separador = "?";
+        if (request.lote()) {
+            url.append(separador).append("lote=true");
+            separador = "&";
+        }
+        String cnpj = request.cnpjConsulta() != null && !request.cnpjConsulta().isBlank()
+                ? request.cnpjConsulta()
+                : cnpjDoCertificado;
+        if (cnpj != null) {
+            url.append(separador).append("cnpjConsulta=").append(encode(cnpj));
+        }
+        return url.toString();
+    }
+
+    /** CNPJ do titular; {@code null} para certificado de pessoa física ou ilegível — o parâmetro é só de CNPJ. */
+    private String cnpjDoCertificado() {
+        try {
+            String inscricao = certificado.inscricaoFederal();
+            return inscricao != null && inscricao.length() == 14 ? inscricao : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**

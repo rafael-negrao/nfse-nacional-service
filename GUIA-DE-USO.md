@@ -819,6 +819,26 @@ IBS/CBS, competência = emissão, leiaute da NT 009. O que a tela fez diferente:
 Fora do perfil (nunca visto no histórico — **pergunte antes de implementar**): retenção de ISSQN,
 qualquer retenção federal, desconto, dedução, intermediário, tomador no exterior, outro `cTribNac`.
 
+### Perfil de emitente: MCamas
+
+Levantado em 04/11/2026 a partir das **71 NFS-e que a MCamas emitiu** pelo sistema da Prefeitura
+(27/05 a 30/10/2026, `tpEmis 2`), lidas pela distribuição do ADN em produção. Apesar da razão social
+("locação de equipamentos"), todas são **"MANUTENÇÃO EM EQUIPAMENTO(S) HOSPITALAR(ES)"** — o mesmo
+serviço da Comaho, e **a receita acima vale sem mudança**, trocando o CNPJ do prestador:
+
+| Período | nNFSe | Regime | Alíquota |
+|---|---|---|---|
+| 27/05 a 07/07/2026 | 1–10 | `opSimpNac 1` — **não optante** | `5.00` |
+| desde 15/07/2026 | 11–71 | `opSimpNac 3` / `regApTribSN 1` — Simples ME/EPP | `0.00` → omitir (`E0625`) |
+
+Nas 71: `140101`/`009`, NBS `999999999`, tributável sem retenção, sem grupo federal, `totTrib`
+zerado e o IBPT na descrição (17,35%, a mesma soma da Comaho). Tomadores: 54 pessoas físicas e 17
+empresas, com endereço.
+
+**Validada em produção em 04/11/2026**: emitida (nNFSe 1, DPS série 999 nº 1, chave
+`…0126115680075753`, leiaute de fevereiro) para a Comaho e cancelada; antes, em produção restrita
+(`…0226116605831076`). O `ComahoEmiteParaMcamasIT` com `-Dnfse.prestador=mcamas` repete o ciclo.
+
 ---
 
 ## 10. IBS/CBS, ajuste de base de cálculo e imóveis
@@ -965,6 +985,10 @@ do {
 - para separar emitidas de recebidas, compare o CNPJ do `<emit>` do XML com o do certificado;
 - matriz consultando filial: `new ConsultaDFeRequest(ambiente, nsu, cnpjFilial, true)` — mesma
   raiz de CNPJ;
+- sem `cnpjFilial`, a biblioteca manda o CNPJ do próprio certificado no `cnpjConsulta`. Sem o
+  parâmetro, o ADN de produção recusou a MCamas com `REJEICAO` e **nenhum erro**
+  (`"TipoConsulta":"InscricaoCertificado"`); até 04/11/2026 a biblioteca o omitia. Se vir esse
+  `REJEICAO` vazio, confira se está numa versão anterior;
 - referência: em 27/10/2026 a Comaho tinha ~800 NSUs em produção (341 NFS-e emitidas, 413
   recebidas), varridos em alguns minutos.
 
