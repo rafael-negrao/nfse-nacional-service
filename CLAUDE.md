@@ -29,6 +29,16 @@ sistema da Prefeitura (Simples, `cTribNac 140101`, `cTribMun 009`, tomador pesso
 endereço): emitida na primeira tentativa (`…0126101339161070`), cancelada e lida como `CANCELADA`
 no ADN. O perfil está em `GUIA-DE-USO.md`, seção 9.
 
+**Em 04/11/2026 a MCamas emitiu como prestadora** (produção restrita, certificado renovado, válido até
+10/08/2027): `EmitirECancelarNfseIT` com `-Dnfse.cert.p12` apontando para o dela — 4 de 4, nota
+`…0126115476290307`, cancelada; a Comaho foi a tomadora. O `emit` veio com o endereço do cadastro
+dela, então ela está no CNC de São Paulo em produção restrita. **O perfil tributário não é o dela**:
+não há nota emitida pela MCamas, e o IT usa o da Adelfo (Simples, `010401`/`001`). Locação de bens
+móveis não é serviço tributável pelo ISS (Súmula Vinculante 31; item 3.01 da LC 116 vetado), então
+antes de levá-la a produção é preciso saber que serviço ela fatura. A pasta `certificado/mcamas/`
+guarda o vencido e o novo; `CertificadoDeTeste` descarta o vencido e usa a senha
+`<nome>.senha.txt`.
+
 Três coisas tiveram de mudar para chegar lá, nesta ordem — cada uma só apareceu depois que a
 anterior foi resolvida:
 
